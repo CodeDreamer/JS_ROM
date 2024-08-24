@@ -29,8 +29,8 @@ L041BA MOVEQ   #0,D0
        MOVE.B  (A5)+,D0
        BEQ.S   L041F8
 L041C0 CMPI.B  #$30,D0
-       BHI.S   L041CC
-       BSR.S   L041FE
+       BHI.S   L041CC      * ->variable
+       BSR.S   L041FE      * ->opcode
        BNE.S   L041F8
        BRA.S   L041BA
 
@@ -56,33 +56,34 @@ L041EA MOVE.W  $00(A6,A4.L),$00(A6,A1.L)
 L041F8 MOVEM.L (A7)+,D1-D3/A0/A2-A3/A5
        RTS
 
+* select on opcode
 L041FE MOVE.W  L04206-$02(PC,D0.W),D0
        JMP     L04206(PC,D0.W)
        
-L04206 DC.W    L04796-L04206
-       DC.W    L0479A-L04206
-       DC.W    L047A6-L04206
-       DC.W    L047B8-L04206
-       DC.W    L04838-L04206
-       DC.W    L0482A-L04206
-       DC.W    L048DE-L04206
-       DC.W    L0497E-L04206
-       DC.W    L04A06-L04206
-       DC.W    L04A0C-L04206
-       DC.W    L04A4A-L04206
-       DC.W    L0423E-L04206
-       DC.W    L04236-L04206
-       DC.W    L04262-L04206
-       DC.W    L0426A-L04206
-       DC.W    L042F2-L04206
-       DC.W    L042E4-L04206
-       DC.W    L04326-L04206
-       DC.W    L0431E-L04206
-       DC.W    L0452C-L04206
-       DC.W    L04446-L04206
-       DC.W    L0442C-L04206
-       DC.W    L044DE-L04206
-       DC.W    L043C2-L04206
+L04206 DC.W    L04796-L04206        * RI.NINT
+       DC.W    L0479A-L04206        * RI.INT
+       DC.W    L047A6-L04206        * RI.NLINT
+       DC.W    L047B8-L04206        * RI.FLOAT
+       DC.W    L04838-L04206        * RI.ADD
+       DC.W    L0482A-L04206        * RI.SUB
+       DC.W    L048DE-L04206        * RI.MULT
+       DC.W    L0497E-L04206        * RI.DIV
+       DC.W    L04A06-L04206        * RI.ABS
+       DC.W    L04A0C-L04206        * RI.NEG
+       DC.W    L04A4A-L04206        * RI.DUP
+       DC.W    L0423E-L04206        * RI.COS
+       DC.W    L04236-L04206        * RI.SIN
+       DC.W    L04262-L04206        * RI.TAN
+       DC.W    L0426A-L04206        * RI.COT
+       DC.W    L042F2-L04206        * RI.ASIN
+       DC.W    L042E4-L04206        * RI.ACOS
+       DC.W    L04326-L04206        * RI.ATAN
+       DC.W    L0431E-L04206        * RI.ACOT
+       DC.W    L0452C-L04206        * RI.SQRT
+       DC.W    L04446-L04206        * RI.LN
+       DC.W    L0442C-L04206        * RI.LOG10
+       DC.W    L044DE-L04206        * RI.EXP
+       DC.W    L043C2-L04206        * RI.POWFP
        
 L04236 MOVEM.L D4-D7/A4,-(A7)
        MOVEQ   #0,D7
@@ -655,15 +656,15 @@ L04830 SUBQ.W  #6,A1
 
 L04838 ADDQ.W  #6,A1
        MOVE.W  $00(A6,A1.L),D0
-       SUB.W   -$06(A6,A1.L),D0
+       SUB.W   -$06(A6,A1.L),D0         * compare exponents
        BGE.S   L0485C
        NEG.W   D0
-       CMPI.W  #$0020,D0
+       CMPI.W  #$0020,D0                * > 32 bits?
        BGE.S   L048AE
        MOVE.L  $02(A6,A1.L),D1
-       BSR.S   L048C2
+       BSR.S   L048C2                   * adjust mantisssa
        MOVE.W  -$06(A6,A1.L),D0
-       ADD.L   -$04(A6,A1.L),D1
+       ADD.L   -$04(A6,A1.L),D1         *  add it
        BRA.S   L04870
 
 L0485C CMPI.W  #$20,D0
@@ -672,7 +673,7 @@ L0485C CMPI.W  #$20,D0
        BSR.S   L048C2
        MOVE.W  $00(A6,A1.L),D0
        ADD.L   $02(A6,A1.L),D1
-L04870 BVS.S   L04898
+L04870 BVS.S   L04898                   *
        BEQ.S   L048AA
        MOVE.L  D1,D3
        ADD.L   D3,D3
@@ -804,38 +805,40 @@ L0497A MOVEQ   #-$12,D0
 L0497E MOVE.L  D4,-(A7)
        MOVE.L  D5,-(A7)
        SF      D5
-       MOVE.L  $02(A6,A1.L),D2
+       MOVE.L  $02(A6,A1.L),D2      * mantisa1
        BGT.S   L04994
        BEQ.S   L04A00
        JSR     L04A0C(PC)
        MOVE.L  D1,D2
        ST      D5
 L04994 ADDQ.W  #6,A1
-       MOVE.L  $02(A6,A1.L),D1
+       MOVE.L  $02(A6,A1.L),D1      * mantisa2
        BGT.S   L049A4
        BEQ.S   L049F6
        JSR     L04A0C(PC)
        NOT.B   D5
-L049A4 MOVE.W  $00(A6,A1.L),D0
+L049A4 MOVE.W  $00(A6,A1.L),D0      * exp2
        ADDI.W  #$0800,D0
-       SUB.W   -$06(A6,A1.L),D0
+       SUB.W   -$06(A6,A1.L),D0     *      - exp1
        BGE.S   L049B8
        CLR.W   D0
        CLR.L   D3
        BRA.S   L049E6
 
-L049B8 BTST    #$0C,D0
+L049B8 BTST    #$0C,D0              * exp overflow ?
        BNE.S   L04A02
-       MOVEQ   #$1F,D4
-       MOVEQ   #0,D3
-L049C2 SUB.L   D2,D1
-       BCS.S   L049CA
+       MOVEQ   #$1F,D4              * for 32 bits
+       MOVEQ   #0,D3                * result
+
+* compute D1/D2
+L049C2 SUB.L   D2,D1                * fits D2 into D1?
+       BCS.S   L049CA               * no, too much subtracted
        BSET    D4,D3
        BRA.S   L049CC
-
 L049CA ADD.L   D2,D1
-L049CC ADD.L   D1,D1
+L049CC ADD.L   D1,D1                * next bit
        DBEQ    D4,L049C2
+
        TST.L   D3
        BLT.S   L049DE
        SUB.L   D1,D2

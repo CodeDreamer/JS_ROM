@@ -118,15 +118,15 @@
        DC.L    $00000030  * TRAPV
        DC.L    $00000032  * privilege violation
        DC.L    $00000034  * trace
-       BSR.S   L00050
-       BSR.S   L00050
-       BSR.S   L00050
-       BSR.S   L00050
-       BSR.S   L00050
-       BSR.S   L00050
-       BSR.S   L00050
-       BSR.S   L00050
-       BSR.S   L00050
+o028   BSR.S   L00050     * 1010-  trap * dc.l $61266124
+o02a   BSR.S   L00050
+o02c   BSR.S   L00050     * 1111-  trap * dc.l $61226120
+o02e   BSR.S   L00050
+o030   BSR.S   L00050
+o032   BSR.S   L00050
+o034   BSR.S   L00050
+o036   BSR.S   L00050
+0o38   BSR.S   L00050
        BSR.S   L00050
        BSR.S   L00050
        BSR.S   L00050
@@ -147,13 +147,13 @@ XL0005C EQU L0005C
 
 L0005E RTE
 oo60    DC.L    L0005E          * 
-oo64    DC.L    L0005E
-oo68    DC.L    XL00352
+oo64    DC.L    L0005E          *  interrupt L1
+oo68    DC.L    XL00352         *            L2
 oo6C    DC.L    L0005E
 oo70    DC.L    L0005E
 oo74    DC.L    L0005E
 oo78    DC.L    L0005E
-oo7c    DC.L    $00000036
+oo7c    DC.L    $00000036       *  ...       L7
 oo80    DC.L    XLTRAP0
 oo84    DC.L    XLTRAP1
 oo88    DC.L    XLTRAP2
@@ -254,6 +254,7 @@ L0015E MOVE.W  D7,(A5)+
        BNE.S   L0015E
        BRA.S   L0015C
 
+* start QL init/reset
 L0016A MOVEA.L #$00040000,A1     * Ramtest
 XL0016A EQU L0016A
        MOVEA.L A1,A4
@@ -314,7 +315,7 @@ L001C2 CMP.L   (A5),D2
        LEA     $00028000,A6 * Startadress of sysvars
        LEA     $0480(A6),A7 * top of suerivsor-stack
        LEA     $00018020,A3   * statusregister of 8049
-       MOVE.B  #$08,$0043(A3) * initialis 8049 to mode 8
+       MOVE.B  #$08,$0043(A3) * initialise 8049 to mode 8
        SF      -$001E(A3)
        MOVE.L  #$061F0000,(A3)  * initialise MDV
        MOVE.B  #$1F,$0001(A3)
@@ -414,6 +415,7 @@ L00286 MOVE.B  D0,(A4)       * place FF00 0000 0000 0000 in all
        SUBA.L  A6,A5         * a5 = zone for basic
        MOVE.W  #$0000,SR     * now user-mode
        JMP     (A1)          * A1 = XL04A74=BASIC-START
+*                              find init roms, display F1/F2, do basic
 
 LTRAP0 ADDQ.W  #2,A7         * decrement user stack
        RTS
@@ -432,7 +434,7 @@ LTRAP4 BSR.S   L00336      * initialise A5 and A6
        BRA     L03432      * Trap4 continues
 XLTRAP4 EQU LTRAP4
 
-L00336 SUBQ.W  #8,A7       * initialising of A5 and A6 and D0 to Bytes
+L00336 SUBQ.W  #8,A7       * initialise of A5 and A6
        MOVE.L  $0008(A7),-(A7)
        MOVEM.L D7/A5-A6,$0004(A7)
        MOVEA.L #$00028000,A6
@@ -441,42 +443,43 @@ L00336 SUBQ.W  #8,A7       * initialising of A5 and A6 and D0 to Bytes
        AND.L   D7,D0
        RTS
 
-L00352 MOVEM.L D7/A5-A6,-(A7)
+L00352 MOVEM.L D7/A5-A6,-(A7)       *#: ext2int entry
 XL00352 EQU L00352
-
        MOVEA.L A7,A5
        MOVEA.L #$00028000,A6
        MOVE.B  $00018021,D7
        LSR.B   #1,D7
        BCS     L02ABC
        LSR.B   #1,D7
-       BCS     L02CCC
+       BCS     L02CCC               * 8049 interrupt
        LSR.B   #1,D7
        BCS     L02CD8
        LSR.B   #1,D7
-       BCS     L00900
+       BCS     L00900               * do poll loop
        LSR.B   #1,D7
        BCC.S   L003A0
        MOVEM.L D0-D6/A0-A4,-(A7)
        MOVEQ   #$00,D0
-       MOVEA.L $0038(A6),A0
-       JSR     L00A9E(PC)     * execute polled task
+       MOVEA.L $0038(A6),A0        * interrupt list
+       JSR     L00A9E(PC)          * execute interrupt tasks
        MOVE.B  $0035(A6),D7
        ORI.B   #$10,D7
        MOVE.B  D7,$00018021
        MOVEM.L (A7)+,D0-D6/A0-A4
-L003A0 BRA     L003B6
+L003A0 BRA     L003B6              * rte
 
-L003A4 MOVEQ   #$00,D0         * back from interrupt
-L003A6 BTST    #$05,$000C(A7)  * was it supervisor-mode
+*#: ret from syscall, clear d0
+L003A4 MOVEQ   #$00,D0
+*#: ret from syscall
+L003A6 BTST    #$05,$000C(A7)  * was it supervisor-mode?
        BNE.S   L003B6
-       TST.W   $0030(A6)
+       TST.W   $0030(A6)       * time for a scheduler rerun?
        BNE     L00936
 L003B6 MOVEM.L (A7)+,D7/A5-A6
        RTE
        
 * returns bas addr. of JOB in A0
-         
+*#: D1 jobid(-1)<>A0 base, D1 jobid
 L003BC TST.W   D1           * test D1 Job's ID
        BGE.S   L003D8 
        MOVE.L  $0064(A6),D1  * SV.JBPNT
@@ -493,8 +496,10 @@ L003D8 BSR.S   L003E4  * is valid job?
        BEQ.S   L003D6
        MOVEQ   #-$02,D0  * invalid job
        ADDQ.W  #4,A7
-       BRA.L   L003A6  * end of interrupt
+       BRA.L   L003A6  * return
 
+* D1= jobid
+* returns JOB.BASE in a0, ^Z flag if fails
 L003E4 CMP.W   $0062(A6),D1   * SV.JBMAX
        BHI.S   L003D6
        MOVEA.W D1,A0
@@ -511,9 +516,9 @@ L003E4 CMP.W   $0062(A6),D1   * SV.JBMAX
        CMP.B   D1,D1
        RTS
 
-* returns ID of JOB in in D0
+* returns ID of CURRENT JOB in in D0
 *         base adress in A3
-
+*#: > D0= currjob_id, A3= currjob base
 L00408 MOVEA.L $0064(A6),A3  * pointer to current job
        MOVE.L  A3,D0
        SUB.L   $0068(A6),D0  * SV.JBBAS
@@ -547,8 +552,9 @@ L00452 BCLR    #$04,$00A0(A6)
        ORI.B   #$80,$0035(A6)
        BRA.S   L00448
 
+
 * trap 1  jump according to D0
-        
+
 L00460 CMPI.W  #$0024,D0
        BHI.S   L004BC
        MOVE.W  D0,D7
@@ -606,15 +612,15 @@ XLtr1d03  EQU TR1d03
 * Info on QDOS
 TR1d00
 XLtr1d00 EQU TR1d00
-o4C2   MOVEQ   #-$01,D1   * sets Job-ID
-       JSR     L003BC(PC) * 
+o4C2   MOVEQ   #-$01,D1   * get Job-ID
+       JSR     L003BC(PC)
        MOVE.L  $BFF6,D2   * D2 = Nr. of version
        MOVEA.L A6,A0
        BRA     L003A4
 
 * Install new table of error messages or tra table
-* D2 = adress of messages
-* D1 = adress of tra-table
+* D2 = adress of error messages or 0
+* D1 = adress of tra-table or 0,1
 TR1d24
 XLtr1d24  EQU TR1d24
 o4D4   TST.L   D2
@@ -662,22 +668,22 @@ L00532 MOVE.B  $0013(A0),D3  * jobs priority increment
        BRA     L003A4
 
 * create new job
-
+* mt.cjob
 TR1d01
 XLtr1d01 EQU TR1d01
-o54C   TST.L   D1          * dentifier<>0
+o54C   TST.L   D1          * identifier<>0
        BEQ.S   L00554
-       JSR     L003BC(PC)  * get info
+       JSR     L003BC(PC)  * get a0 base
 L00554 MOVEM.L D1-D3/A1-A4,-(A7)
        MOVEQ   #$00,D7
        MOVEA.L $0068(A6),A4  * SV.JBBAS
-L0055E TST.B   (A4)        * job  not activ
+L0055E TST.B   (A4)        * free entry ?
        BLT.S   L00570      * initalise
        ADDQ.W  #1,D7
        ADDQ.W  #4,A4       * next job
        CMPA.L  $006C(A6),A4 * too far
-       BLT.S   L0055E       * no - continue testing
-       MOVEQ   #-$02,D0     * invalid job
+       BLT.S   L0055E       * try next table entry
+       MOVEQ   #-$02,D0     * job table too small
        BRA.S   L005E0
 
 * activate job
@@ -738,13 +744,14 @@ XLtr1d04 EQU TR1d04
 o5EA   JSR     L003BC(PC)    * returns bas addr. in A0; ID in D1
        MOVE.L  D1,D0
 L005F0 TST.B   $0013(A0)  * jobs priority increment
-       BNE     L006C0        * no 'not complete'
-       JSR     L006C6(PC)    * look for next job
-       TST.L   D1            * same owner?
-       BNE.S   L005F0        * continue
-       MOVE.L  D0,D1         * restor D1 (JOB-ID)
-       
-* suspend activ job
+       BNE     L006C0        * 'not complete'
+       JSR     L006C6(PC)    * look for next job in tree
+       TST.L   D1
+       BNE.S   L005F0        *   ... for all jobs in tree
+       MOVE.L  D0,D1         * restore D1 (JOB-ID)
+* none active so far, fall through
+
+* mt.frjob
 TR1d05
 XLtr1d05 EQU TR1d05
        JSR     L003BC(PC)    * returns bas addr. in A0
@@ -753,70 +760,72 @@ XLtr1d05 EQU TR1d05
        MOVEA.W D1,A1
        ADDA.W  A1,A1
        ADDA.W  A1,A1
-       ADDA.L  $0068(A6),A1  * SV.JBBAS
-L00616 ADDQ.B  #1,(A1)
-       JSR     L006C6(PC)    * add 1 to first byte of job
+       ADDA.L  $0068(A6),A1  * find table entry
+L00616 ADDQ.B  #1,(A1)       * mark table entry
+       JSR     L006C6(PC)    * find next job in tree
        TST.L   D1
-       BNE.S   L00616
-       SF      -(A7)
-       MOVEQ   #$00,D1
-       MOVEA.L $0068(A6),A1  * SV.JBBAS
-L00628 ADDQ.W  #4,A1
-       ADDQ.W  #1,D1
+       BNE.S   L00616        *      ... while any job in tree
+
+       SF      -(A7)         * flag: jobid -1 removed?
+       MOVEQ   #$00,D1       * now scan the marked jobs
+       MOVEA.L $0068(A6),A1   * SV.JBBAS
+L00628 ADDQ.W  #4,A1          * next table entry
+       ADDQ.W  #1,D1          * next job nr
        CMP.W   $0062(A6),D1   * SV.JBMAX
        BHI     L006B6
-       TST.B   (A1)
-       BLE.S   L00628  * loop testing waiting jobs
-       SF      (A1)
+       TST.B   (A1)           * marked ?
+       BLE.S   L00628         * no ->
+       SF      (A1)           * clear mark
        MOVEA.L (A1),A0
        SWAP    D1
        MOVE.W  $0010(A0),D1    * TAG for JOB
        SWAP    D1
        CMPA.L  $0064(A6),A1  * SV.JBPNT
        BNE.S   L0064C
-       ST      (A7)
-L0064C TST.B   $0017(A0)     * is any job witing for this job to finish
+       ST      (A7)          * set if removed jobid=-1
+L0064C TST.B   $0017(A0)     * JOB.WFLAG
        BEQ.S   L00670
        MOVE.L  $0018(A0),D0  * D0 = ID of waiting JOB
        EXG     D0,D1
-       JSR     L003E4(PC)    * JOB oK.?
+       JSR     L003E4(PC)    *     get its base, Z flag
        EXG     D1,D0
+       BNE.S   L00670        *     ... invalid job
+       CMPI.W  #$FFFE,$0014(A0)  * is it really waiting ?
        BNE.S   L00670
-       CMPI.W  #$FFFE,$0014(A0)  * test JOB status
-       BNE.S   L00670
-       CLR.W   $0014(A0)      * JOB status=0
-       MOVE.L  D3,$0020(A0)
+       CLR.W   $0014(A0)      *    release it
+       MOVE.L  D3,$0020(A0)   *    JOB.D0 = error code
        
-* now the channels owned by that job are suspended
+* now free jobs resources
 
 L00670 MOVEA.L $0004(A6),A0     * base of common heap
-L00674 CMP.L   $0008(A0),D1     * owner of JOB
+L00674 CMP.L   $0008(A0),D1     * owner of this ?
        BNE.S   L0069A
        MOVEM.L D1/D3/A0-A1,-(A7)
        MOVE.L  $000C(A0),D1
        BEQ.S   L00688
        MOVEA.L D1,A1
-       ST      (A1)
+       ST      (A1)             * set flag on release
 L00688 MOVEA.L $0004(A0),A1
        LEA     -$0018(A1),A3
-       MOVEA.L $000C(A1),A1
-       JSR     (A1)
+       MOVEA.L $000C(A1),A1         * dev_close
+       JSR     (A1)                 * close channel or release memory
        MOVEM.L (A7)+,D1/D3/A0-A1
 L0069A ADDA.L  (A0),A0
        CMPA.L  $000C(A6),A0  * SV.FREE
-       BLT.S   L00674
+       BLT.S   L00674        * try next block
+
        MOVEM.L D1/D3/A1,-(A7)
        MOVEA.L (A1),A0
-       JSR     L0308C(PC)      * RELEASE MEMORY
+       JSR     L0308C(PC)      * RELEASE headerblock + program space
        MOVEM.L (A7)+,D1/D3/A1
-       ST      (A1)
-       BRA     L00628
+       ST      (A1)            * invalidate table entry
+       BRA     L00628          * remove some more jobs
 
 L006B6 TST.B   (A7)+
-       BEQ     L003A4
-       BRA     L0093A
+       BEQ     L003A4          * return
+       BRA     L0093A          * must run through scheduler(job -1 removed)
 
-L006C0 MOVEQ   #-$01,D0        * no 'not complete'
+L006C0 MOVEQ   #-$01,D0        * 'not complete'
        BRA     L003A6
 
 * look for ID of next JOB in tree
@@ -825,15 +834,15 @@ L006C6 MOVE.L  D1,D2         * D2 = owner job
        MOVEQ   #$00,D1
 L006CA ADDQ.W  #1,D1
        CMP.W   $0062(A6),D1   * SV.JBMAX
-       BGT.S   L006E0
+       BGT.S   L006E0         * -> try next branch
        BSR.S   L006EE         * get Job base
-       TST.B   (A1)           * is it activ?
+       TST.B   (A1)           * valid entry?
        BLT.S   L006CA
-       CMP.L   $0008(A0),D2   * same owner of JOB
+       CMP.L   $0008(A0),D2   * child of JOB ?
        BEQ.S   L00700
        BRA.S   L006CA         * continue searching
 
-L006E0 CMP.W   D2,D0 
+L006E0 CMP.W   D2,D0            * setup for next branch
        BEQ.S   L006FC
        MOVE.W  D2,D1
        BSR.S   L006EE
@@ -851,18 +860,18 @@ L006FC MOVEQ   #$00,D1
        RTS
 
 L00700 SWAP    D1
-       MOVE.W  $0010(A0),D1    * TAG for JOB
+       MOVE.W  $0010(A0),D1    * get job TAG
        SWAP    D1
        RTS
 
-* set for this job the trap vectors
+* mt.trapv set for this job the trap vectors
 TR1d07
 XLtr1d07 EQU TR1d07
 
 o70A   JSR     L003BC(PC)    * returns bas addr. of JOB in A0
        SUBA.W  #$0054,A1
-       MOVE.L  A1,$0050(A6)  * pointer to trap redir. table
-       MOVE.L  A1,$001C(A0)  * TRAPV
+       MOVE.L  A1,$0050(A6)  * pointer to current trap redir. table
+       MOVE.L  A1,$001C(A0)  *        ...   jobs     ...
        BRA     L003A4
 
 
@@ -894,8 +903,8 @@ L0073A EXG     D2,D1
        BNE.S   L007BC
        ADDQ.W  #4,A0
 L0074E
-       MOVE.L  XL0075A,(A0)+   * adress
-       MOVE.L  (A7)+,(A0)+
+       MOVE.L  XL0075A,(A0)+   * pseudo driver adress
+       MOVE.L  (A7)+,(A0)+     * job id
        CLR.L   (A0)+
        BRA.S   L00766  * !!! there: BRA L003A4
 
@@ -954,7 +963,7 @@ XLtr1d17 EQU TR1d17
 L007BC ADDQ.W  #4,A7
 L007BE BRA     L003A6
 
-* set or read dislay mode according to D1 and D2 ½ Adder
+* set or read display mode according to D1 and D2 ½ Adder
 TR1d10
 XLtr1d10 EQU TR1d10
 o7C0   MOVE.B  $0034(A6),D0     * SV.MCSTA
@@ -1101,6 +1110,7 @@ L008F2 ADD.W   D0,D0
        JSR     L039E2(PC)    * UT.UNLNK
 L008FC BRA     L003A4
 
+
 * polled interrupt
 L00900 ADDQ.W  #1,$0030(A6)    * SV.POLLM
        BVC.S   L0090A
@@ -1109,25 +1119,26 @@ L0090A MOVEM.L D0-D6/A0-A4,-(A7)
        MOVEQ   #-$08,D0
        MOVEQ   #$01,D3
        MOVEA.L $003C(A6),A0    * SV.PLIST
-       JSR     L00A9E(PC)      * execute polled task
+       JSR     L00A9E(PC)      * execute poll tasks
        MOVEM.L (A7)+,D0-D6/A0-A4
        MOVE.B  $0035(A6),D7    * SV.PCINT
        ORI.B   #$08,D7
        MOVE.B  D7,$00018021
        BTST    #$05,$000C(A7)  * supervisor mode?
-       BNE     L003B6
+       BNE     L003B6          * yes -> rte
+* else fall through into scheduler
 L00936 JSR     L009D4(PC)      * save jobs data
 L0093A MOVE.W  $0030(A6),D3    * SV.POLLM
        CLR.W   $0030(A6)
        ADDQ.W  #1,$002E(A6)    * SV.RAND
        MOVEQ   #-$10,D0
        MOVEA.L $0040(A6),A0    * SV.SHLST
-       JSR     L00A9E(PC)      * execute polled task
+       JSR     L00A9E(PC)      * execute sched tasks
        JSR     L00A0C(PC)      * get highest job priority
        TST.L   D0
-       BLT.S   L0093A        * continue
-       MOVE.L  D0,$0064(A6)  * SV.JBPNT
-       JSR     L00A78(PC)    * execute job
+       BLT.S   L0093A        * no runnable job ->
+       MOVE.L  D0,$0064(A6)  * SV.JBPNT: new current job
+       JSR     L00A78(PC)    * execute it
        
 TR1d08 
 XLtr1d08 EQU TR1d08
@@ -1168,12 +1179,12 @@ o9A0   JSR     L003BC(PC)    * returns bas addr. in A0
        TST.B   $0013(A0)     * jobs priority increment
        BNE.S   L009D0
        MOVE.B  D2,$0013(A0)  * jobs priority increment
-       MOVE.L  $0004(A0),$0062(A0)  * ½ Adder S. 335
-       TST.W   D3
-       BEQ.S   L009CA
+       MOVE.L  $0004(A0),$0062(A0)  * START ½ Adder S. 335
+       TST.W   D3            * wait ?
+       BEQ.S   L009CA        * no ->
        ST      $0017(A0)
        JSR     L00408(PC)
-       MOVE.L  D0,$0018(A0)
+       MOVE.L  D0,$0018(A0)  * JOB.WJOB
        MOVE.W  #$FFFE,$0014(A3)
 L009CA MOVEQ   #$00,D0
 L009CC BRA     L00936
@@ -1181,56 +1192,59 @@ L009CC BRA     L00936
 L009D0 MOVEQ   #-$01,D0
        BRA.S   L009CC
 
-* save data and regs of job
+* scheduler aux subroutines
+
+* save jobs registers into jobheader
 L009D4 MOVE.L  A6,-(A7)
        MOVEA.L $0064(A6),A6  * SV.JBPNT
        MOVEA.L (A6),A6
-       TST.B   $0012(A6)
+       TST.B   $0012(A6)     * accumulated priority
        BEQ.S   L009E8
        MOVE.B  #$01,$0012(A6)
-
-L009E8 MOVEM.L D0-D7/A0-A4,$0020(A6) * SV.RAMT
-       MOVE.L  (A5)+,$003C(A6)    * SV.PCINT
-       MOVE.L  (A5)+,$0054(A6)    * SV.BTPNT
-       MOVE.L  (A5)+,$0058(A6)    * SV.BTBAS
-       MOVE.L  USP,A0
-       MOVE.L  A0,$005C(A6)      * SV.BTTOP
-       MOVE.W  (A5)+,$0060(A6)   * SV.JBTAG
-       MOVE.L  (A5)+,$0062(A6)   * SV.JBMAX
+L009E8 MOVEM.L D0-D7/A0-A4,$0020(A6) * save regs into jobheader
+       MOVE.L  (A5)+,$003C(A6)    * D7
+       MOVE.L  (A5)+,$0054(A6)    * a5
+       MOVE.L  (A5)+,$0058(A6)    * a6
+       MOVE.L  USP,A0             * a7
+       MOVE.L  A0,$005C(A6)       *
+       MOVE.W  (A5)+,$0060(A6)    * SR
+       MOVE.L  (A5)+,$0062(A6)    * PC
        MOVEA.L (A7)+,A6
        RTS
 
-* get highest job priority
+* get job with highest priority
+* D0=-2 if none ready
 L00A0C MOVEQ   #-$02,D0
        MOVEQ   #$00,D1
-       MOVEA.L $0064(A6),A2  * SV.JBPNT
-       MOVEA.L A2,A4
+       MOVEA.L $0064(A6),A2   * SV.JBPNT
+       MOVEA.L A2,A4          * a4= current job
        MOVE.W  $0062(A6),D2   * SV.JBMAX
        LSL.W   #2,D2
-       MOVEA.L $0068(A6),A3  * SV.JBBAS
+       MOVEA.L $0068(A6),A3   * SV.JBBAS
        ADDA.W  D2,A3
-L00A22 ADDQ.W  #4,A2
-       CMPA.L  A3,A2
+
+L00A22 ADDQ.W  #4,A2          * a2= currently examined job
+       CMPA.L  A3,A2          * >SV.JBMAX ?
        BLE.S   L00A2C
-       MOVEA.L $0068(A6),A2  * SV.JBBAS
-L00A2C TST.B   (A2)
-       BLT.S   L00A72
+       MOVEA.L $0068(A6),A2   *  ... wrap search
+L00A2C TST.B   (A2)           * valid job ?
+       BLT.S   L00A72         * no ->
        MOVEA.L (A2),A0
-       TST.B   $0013(A0)  * jobs priority increment
-       BEQ.S   L00A72
-       TST.W   $0014(A0)  * JOB status
+       TST.B   $0013(A0)    * jobs priority increment
+       BEQ.S   L00A72       * 0 -> no chance
+       TST.W   $0014(A0)    * JOB status
+       BEQ.S   L00A54       * -> runnable
+       BLT.S   L00A72       * -> indefintely suspended, try next
+       SUB.W   D3,$0014(A0)  * decrement timeout by SV.POLLM
+       BGT.S   L00A72        * -> still suspended
+       CLR.W   $0014(A0)     * make sure it doesn't get suspended by accident
+       MOVE.L  $000C(A0),D2  * JOB.HOLD
        BEQ.S   L00A54
-       BLT.S   L00A72
-       SUB.W   D3,$0014(A0)  * JOB status
-       BGT.S   L00A72
-       CLR.W   $0014(A0)  * JOB status=0
-       MOVE.L  $000C(A0),D2
-       BEQ.S   L00A54
-       MOVEA.L D2,A1
+       MOVEA.L D2,A1         * release flag
        SF      (A1)
-L00A54 MOVE.B  $0012(A0),D2    * Jobs accumulated priority
+L00A54 MOVE.B  $0012(A0),D2     * Jobs accumulated priority
        BEQ.S   L00A64
-       ADD.B   $0013(A0),D2  * jobs priority increment
+       ADD.B   $0013(A0),D2     * jobs priority increment
        BCC.S   L00A66
        ST      D2
        BRA.S   L00A66
@@ -1238,30 +1252,30 @@ L00A54 MOVE.B  $0012(A0),D2    * Jobs accumulated priority
 L00A64 MOVEQ   #$01,D2
 L00A66 MOVE.B  D2,$0012(A0)    * Jobs accumulated priority
        CMP.B   D1,D2
-       BLS.S   L00A72
-       MOVE.L  A2,D0
-       MOVE.B  D2,D1
+       BLS.S   L00A72          * no chance
+       MOVE.L  A2,D0           * best so far
+       MOVE.B  D2,D1           * ...         priority
 L00A72 CMPA.L  A4,A2
        BNE.S   L00A22
        RTS
 
-* execute job
+* return from scheduler and run job
 L00A78 MOVEA.L $0064(A6),A0  * SV.JBPNT
        MOVEA.L (A0),A0
        ADDA.W  #$0016,A7
-       MOVE.L  $0062(A0),-(A7)
-       MOVE.W  $0060(A0),-(A7)
-       MOVE.L  $001C(A0),$0050(A6)
+       MOVE.L  $0062(A0),-(A7)          * JOB.PC
+       MOVE.W  $0060(A0),-(A7)          * JOB.SR
+       MOVE.L  $001C(A0),$0050(A6)      * SV.TRAPV <- JOB.TRAPV
        MOVEA.L $005C(A0),A1
-       MOVE.L  A1,USP
+       MOVE.L  A1,USP                   * JOB.A7
        MOVEM.L $0020(A0),D0-D7/A0-A6
        RTE
 
-*  execute polled task
-
+*  execute linked tasks (extint,poll,sched)
+*  A0= list
 L00A9E MOVE.W  D0,-(A7)
 L00AA0 MOVEA.L A0,A3
-       ADDA.W  (A7),A3
+       ADDA.W  (A7),A3        * offset to driver address
        MOVE.L  A0,-(A7)
        BEQ.S   L00ABC
        MOVE.W  D3,-(A7)
@@ -1276,7 +1290,8 @@ L00AA0 MOVEA.L A0,A3
 L00ABC ADDQ.L  #6,A7
        RTS
 
-L00AC0 DC.L    L00C88   * pointer to next routine in link
+* 'SER' driver
+L00AC0 DC.L    L00C88   * pointer to next driver in link
        DC.L    L00BB6   * adress of in / out
        DC.L    L00AD0   * adress to open chan
        DC.L    L00B8E   * adress to close 
@@ -1478,7 +1493,8 @@ L00C7A ROR.B   #1,D1
        ROXR.B  #1,D1
        RTS
 
-L00C88 DC.L    L00D36   * pointer to next linked routine
+* 'PIPE' driver
+L00C88 DC.L    L00D36   * pointer to next driver
        DC.L    L037CC   * addr. for pipe I/O
        DC.L    L00C98   * addr. to open pipe#
        DC.L    L00D0A   * addr. to close pipe#
@@ -1496,32 +1512,33 @@ o00CA6 DC.W    $0004
        DC.B    ' _'    * '_' necessary
        DC.W    $0000   * lenght parameter
        
-L00CB2 MOVE.W  (A7),D1
+L00CB2 MOVE.W  (A7),D1       * any length ?
        BEQ.S   L00CD2
        ADDI.W  #$31,D1
-       JSR     L02FAE(PC)   * MM.ALCHP
+       JSR     L02FAE(PC)    * MM.ALCHP
        BNE.S   L00D00
        MOVE.W  (A7),D1
        ADDQ.W  #1,D1
        LEA     $0020(A0),A2   * pointer to buffer
        JSR     L037F4(PC)     * IO.QSET
        MOVE.L  A2,$001C(A0)
-       BRA.S   L00CFE
+       BRA.S   L00CFE         * done
 
-L00CD2 MOVEA.W D3,A2
+* connect to another pipe
+L00CD2 MOVEA.W D3,A2          * chan id
        ADDA.L  A2,A2
        ADDA.L  A2,A2
        ADDA.L  $0078(A6),A2
-       MOVEA.L (A2),A2
+       MOVEA.L (A2),A2        * chan base
        CMPI.L  #L00C88,$0004(A2)  * is it a pipe channel ?
-       BNE.S   L00D04             * no ½ continue searching
-       MOVE.L  A2,-(A7)
+       BNE.S   L00D04             * no ½ error
+       MOVE.L  A2,-(A7)           * save its base
        MOVEQ   #$20,D1
        JSR     L02FAE(PC)   *  MM.ALCHP
        MOVEA.L (A7)+,A2
-       BNE.S   L00D00
-       LEA     $0020(A2),A2  * pointer to buffer
-       MOVE.L  A0,(A2)
+       BNE.S   L00D00        * -> no mem
+       LEA     $0020(A2),A2  * pointer to queue
+       MOVE.L  A0,(A2)       * link queues
        MOVE.L  A2,$0018(A0)
 L00CFE MOVEQ   #$00,D0
 L00D00 ADDQ.W  #2,A7
@@ -1531,10 +1548,11 @@ L00D04 MOVEQ   #-$0F,D0
        ADDQ.W  #2,A7
        RTS
 
-L00D0A TST.L   $0018(A0)   * is channel open?
+* close
+L00D0A TST.L   $0018(A0)
        BNE.S   L00D1C
        LEA     $0020(A0),A2  * pointer to buffer
-       TST.L   (A2)          * file empty?
+       TST.L   (A2)          * queue empty?
        BEQ.S   L00D32        * yes: close channel
        JMP     L03888(PC)    * IO.QEOF
 
@@ -1550,7 +1568,8 @@ L00D1C MOVE.L  $0018(A0),-(A7)
 
 L00D32 JMP     L0305E(PC)    * MT.RECHP
 
-L00D36 DC.L    L01104   * ADRESS ON NEXT LINKED ROUTINE
+* 'CON' driver
+L00D36 DC.L    L01104   * ADRESS ON NEXT LINKED DRIVER
        DC.L    L00E76   * I/O OF CON AND SER
        DC.L    L00D46   * OPEN CON OR SER
        DC.L    L00E3A   * CLOSE CON OR SER
@@ -1768,7 +1787,7 @@ L00F14 BSR.S   L00EFA      * put byte
        BSR.S   L00F46   * position cursor
        BRA.S   L00F42
 
-L00F36 TST.B   $0048(A0) * is curosr at end of ligne?
+L00F36 TST.B   $0048(A0) * is curosr at end of line?
        BGE.S   L00F3E
        BSR.S   L00F46   * position cursor
 L00F3E ST      $0048(A0)
@@ -2070,7 +2089,7 @@ L011F8 MOVE.B  D1,$1F(A0,D2.W)
 
 L01202 
        DC.L    L02D00   * pointer to list of scheduler tasks
-       DC.L    L0120A   * pointer to polled tasks
+       DC.L    L0120A   * pointer to first task
 
 L0120A MOVE.L  $004C(A6),D4   * SV.KEYQ
        BEQ.S   L0122E
@@ -2081,7 +2100,7 @@ L0120A MOVE.L  $004C(A6),D4   * SV.KEYQ
        BEQ.S   L01228
        SUB.W   D3,D4
        BGT.S   L0122A
-       JSR     L01BA2(PC)
+       JSR     L01BA2(PC)     * show cursor (flash)
 L01228 MOVEQ   #$0C,D4
 L0122A MOVE.W  D4,$00AA(A6)   * SV.FSTAT
 L0122E RTS
@@ -2108,7 +2127,7 @@ L01960 MOVE.L  (A0),D2
        MOVE.L  D2,D1
        BRA.S   L0198E
 
-L01972 ADD.L   D2,D1
+L01972 ADD.L   D2,D1       * adjust
 L01974 SF      (A0)+
        MOVEQ   #-$11,D0
        MOVEQ   #$03,D3
@@ -2116,11 +2135,11 @@ L0197A ROL.L   #8,D1
        MOVEQ   #$00,D2
        MOVE.B  D1,D2
        BRA.S   L01984
-
 L01982 MOVE.B  D0,(A0)
 L01984 DBF     D2,L01982
        ROR.B   #1,D0
        DBF     D3,L0197A
+
 L0198E BRA     L003A4
 
 
@@ -2130,7 +2149,7 @@ L0198E BRA     L003A4
 *
 ***********************
 *
-* screen printing routine for trap 3 d0=5 and d0 between $09 and $36
+* screen printing routine for trap 3 d0=5 or d0 = [$09 - $36]
 * this routine is extremely slow - it should be speeded up
 *
 ***********************
@@ -2150,7 +2169,7 @@ L019B0 CMPI.W  #$0036,D0   * d0>36
        CMPI.W  #$0009,D0   * do<9
        BLT.S   L019EE
        BGT.S   L019C2
-       JSR     (A2)        * d0=9 : do own extended task 
+       JSR     (A2)        * sd.extop: do userroutine
        BRA.S   L019CE
 
 L019C2 ADD.B   D0,D0       * adjust d0 for displacement
@@ -3495,7 +3514,7 @@ L02558 MOVE.L  (A1),D6
        BNE.S   L0256A
        EXG     D6,D7
 L0256A LSL.W   #7,D1
-       MOVEA.L #$00020000,A1
+       MOVEA.L #$00020000,A1        * screen mem address
        ADDA.W  D1,A1
        LSL.W   #6,D3
        MOVEA.W D3,A2
@@ -4102,7 +4121,7 @@ L02CF8
        DC.L    L02D08   * interrupt-routines
        
 * table of scheduler tasks
-L02D00 DC.L    L03480   * List of next table
+L02D00 DC.L    L03480   * List of next linkage
        DC.L    L02D14   * adress of scheduler task
 
 L02D08 MOVE    SR,-(A7)    * RTS=RTE !
@@ -4267,16 +4286,16 @@ L02EC0 RTS
 
 L02EC2 RTS
 
-L02EC4 SF      $0033(A6)     * was ctrl-space ? SV.SCRST
+L02EC4 SF      $0033(A6)     * was ctrl-space ? clear SV.SCRST
        MOVEA.L $0068(A6),A3  * SV.JBBAS
-       MOVEA.L (A3),A3
-       SF      $00F7(A3)
-       MOVE.W  $0014(A3),D0
-       BEQ.S   L02EEA
+       MOVEA.L (A3),A3       * SuperBasic
+       SF      $00F7(A3)        * BV.BRK
+       MOVE.W  $0014(A3),D0     * job.stat
+       BEQ.S   L02EEA           * ok ->
        ADDQ.W  #1,D0
-       BLT.S   L02EEA
+       BLT.S   L02EEA           * waiting for job ->
        CLR.W   $0014(A3)
-       MOVE.L  $000C(A3),D0
+       MOVE.L  $000C(A3),D0     * release flag
        BEQ.S   L02EEA
        MOVEA.L D0,A3
        SF      (A3)
@@ -4311,7 +4330,7 @@ L02F36 JMP     L03838(PC)    * IO.QIN
 L02F3A NOT.B   $0033(A6)    * invert screen status
        RTS
 
-L02F40 LEA     -$0068(A2),A0    * a0 = screenbase
+L02F40 LEA     -$0068(A2),A0    * a0 = chbase
        TST.B   $0043(A0)
        BGE.S   L02F54           * cursor activ
        JSR     L01B86           * reactivate
@@ -4325,7 +4344,7 @@ L02F54 MOVEA.L (A2),A2
        MOVE.L  A2,$004C(A6)     * SV.KEYQ
        CLR.W   $AA(A6)
        
-* omit instruuction but let label !!!
+* omit instruction but let label !!!
 
 L02F6A JMP     L02F6E(PC)    * returns D6=6  A0=$18020  A1=$18003
 
@@ -4647,6 +4666,7 @@ L031E0 MOVEA.L $0068(A6),A3  * SV.JBBAS
        MOVE.L  A3,USP
 L0320A RTS
 
+
 L0320C ADDI.L  #$1FF,D1    * 512 Bytes round
 L03212 ANDI.W  #$FE00,D1
        RTS
@@ -4693,10 +4713,10 @@ L03260 MOVEQ   #$0C,D2
        BEQ.S   L0326C
        JSR     L0352A(PC)
        BRA.S   L03260
-
 L0326C CLR.B   (A1)
        ADDA.W  D3,A1
 L03270 DBF     D0,L03260
+
        BRA.S   L0329A
 
 L03276 BSR.S   L03212
@@ -4721,32 +4741,32 @@ L0329A MOVEQ   #$00,D0
 L0329E MOVEQ   #-$03,D0    * OUT OF MEMORY
 L032A0 RTS
 
-* supervisor of trap 2
 
+* trap 2 dispatch
 L032A2 MOVEA.L $0064(A6),A1  * SV.JBPNT
        MOVEA.L (A1),A1
        BCLR    #$07,$0016(A1)
        BEQ.S   L032B4
        ADDA.L  $0008(A5),A0
 L032B4 SUBQ.B  #1,D0
-       BEQ.S   L032D0
+       BEQ.S   L032D0      * open
        SUBQ.B  #1,D0
-       BEQ     L03352
+       BEQ     L03352      * close
        SUBQ.W  #1,D0
-       BEQ     L036B6
+       BEQ     L036B6      * format
        SUBQ.W  #1,D0
-       BEQ     L03552
+       BEQ     L03552      * delete
        MOVEQ   #-$0F,D0    * bad parameter
        BRA     L003A6
 
-* maintain trap 2 d0=1
 
+* trap2, open
 L032D0 MOVEM.L A1-A4,-(A7)
        MOVEA.L A0,A1
-       JSR     L003BC(PC)    * returns bas addr. in A0
+       JSR     L003BC(PC)    * returns bas addr. in A0, jobid in d1
        EXG     A1,A0
        MOVEA.L $0078(A6),A3  * SV.CHBAS
-L032E0 TST.B   (A3)
+L032E0 TST.B   (A3)          * find free entry in chan table
        BLT.S   L032F0
        ADDQ.W  #4,A3
        CMPA.L  $007C(A6),A3  * SV.CHTOP
@@ -4767,7 +4787,7 @@ L032F4 MOVEM.L D1-D7/A1-A6,-(A7)
        MOVEA.L (A2),A2
        MOVE.L  A2,D0
        BGT.S   L032F4
-       JSR     L0355A(PC)
+       JSR     L0355A(PC)           * try directory drivers
        TST.L   D0
        BNE.S   L0334C
 
@@ -4795,9 +4815,9 @@ L0334C MOVEM.L (A7)+,A1-A4
        BRA.S   L03378
 
 * maintain channel closing trap 2, d0 = 2
-
+* close channel a0
 L03352 MOVE.L  A0,D7
-       JSR     L03476(PC)
+       JSR     L03476(PC)           * channel base ->a0
        MOVEM.L D1-D7/A1-A6,-(A7)
        MOVEA.L $0004(A0),A4
        LEA     -$0018(A4),A3
@@ -4808,16 +4828,16 @@ L03352 MOVE.L  A0,D7
        MOVEA.L $0078(A6),A0  * SV.CHBAS
        ADDA.W  D7,A0
        ST      (A0)
-L03378 BRA     L003A6
+L03378 BRA     L003A6               * invalidate table entry
 
-* maintain trap 3
-
+* do trap #3 call
+* see also L03480
 L0337C MOVE.L  A0,D7
-       JSR     L03476(PC)
-       TAS     $0012(A0)    * Jobs accumulated priority
-       BNE     L03414
+       JSR     L03476(PC)   * channel base ->a0
+       TAS     $0012(A0)    * CH.STAT
+       BNE     L03414       * blocked ->
        MOVEM.L D2-D7/A2-A6,-(A7)
-       CLR.L   -(A7)
+       CLR.L   -(A7)            * a6 relative offset
        ANDI.L  #$0000007F,D0
        CMPI.B  #$49,D0
        BGT.S   L033B0
@@ -4828,49 +4848,49 @@ L0337C MOVE.L  A0,D7
        BTST    #$01,D0
        BEQ.S   L033B0
 L033AE MOVEQ   #$00,D1
-L033B0 MOVEA.L $0064(A6),A3  * SV.JBPNT
+L033B0 MOVEA.L $0064(A6),A3     * SV.JBPNT
        MOVEA.L (A3),A3
-       BCLR    #$07,$0016(A3)
+       BCLR    #$07,$0016(A3)   * tst&clear trap#4 bit
        BEQ.S   L033C4
        MOVE.L  $0008(A5),(A7)
-       ADDA.L  (A7),A1
-L033C4 MOVEA.L $0004(A0),A4
-       MOVE.B  D0,$0013(A0)  * jobs priority increment
-       MOVEQ   #$00,D3
+       ADDA.L  (A7),A1          * adjust for a6 relative
+L033C4 MOVEA.L $0004(A0),A4     * CH.DRIVR
+       MOVE.B  D0,$0013(A0)     * CH.ACTN
+       MOVEQ   #$00,D3          * 1st call
        LEA     -$0018(A4),A3
        MOVEA.L $0004(A4),A4
-       JSR     (A4)
+       JSR     (A4)             * do the I/O
        SUBA.L  (A7),A1
-       CMPI.W  #-1,D0
+       CMPI.W  #-1,D0           * err.nc?
        BNE.S   L03422
        MOVE.W  $000A(A7),D3
-       BEQ.S   L03422
-       MOVEA.L $002C(A7),A6
-       JSR     L00408(PC)
-       MOVE.L  D0,$0014(A0)  * JOB status
-       LEA     $0012(A0),A0    * Jobs accumulated priority
-       TST.L   (A7)+
+       BEQ.S   L03422           * tmout=0 -> return error
+       MOVEA.L $002C(A7),A6     * restore SYS.BASE
+       JSR     L00408(PC)       * current jobid,jobheader=d0,a3
+       MOVE.L  D0,$0014(A0)     * channel busy with CH.JOBW
+       LEA     $0012(A0),A0     * CH.STAT
+       TST.L   (A7)+            * already set?
        BNE.S   L033FC
-       ST      (A0)
-L033FC MOVE.L  A0,$000C(A3)
-       MOVE.W  D3,$0014(A3)
-       SF      $0012(A3)
+       ST      (A0)             * no: channel busy
+L033FC MOVE.L  A0,$000C(A3)     * JOB.HOLD
+       MOVE.W  D3,$0014(A3)     * JOB.STAT=timeout
+       SF      $0012(A3)        * clear accumulated priority
        MOVEQ   #-$01,D0
        MOVEM.L (A7)+,D2-D7/A2-A6
 L0340E MOVEA.L D7,A0
        BRA     L00936
 
-L03414 TST.W   D3
-       BEQ.S   L0341E
-       SUBQ.L  #2,$000E(A7)
-       BRA.S   L0340E
+L03414 TST.W   D3                   * timeout ?
+       BEQ.S   L0341E               * -> return
+       SUBQ.L  #2,$000E(A7)         * adjust jobs PC before the trap#3
+       BRA.S   L0340E               * since channel blocked by other job
 
 L0341E MOVEQ   #-$01,D0
        BRA.S   L0342C
 
 L03422 ADDQ.W  #4,A7
        MOVEM.L (A7)+,D2-D7/A2-A6
-       SF      $0012(A0)    * Jobs accumulated priority
+       SF      $0012(A0)    * clear CH.STAT
 L0342C MOVEA.L D7,A0
        BRA     L003A6
 
@@ -4883,7 +4903,7 @@ L03432 MOVE.L  A3,-(A7)
        MOVEA.L (A7)+,A3
        BRA     L003A6
 
-* verify whether channel is open and belongs to job
+* verify that channel exists and find its base
 
 L03444 MOVE.L  A0,-(A7)
        MOVE.L  D0,-(A7)
@@ -4897,7 +4917,7 @@ L03448 MOVE.L  A0,D0
        BLT.S   L0346E
        MOVEA.L (A0),A0
        SWAP    D0
-       CMP.W   $0010(A0),D0    * TAG for JOB
+       CMP.W   $0010(A0),D0    * CH.TAG
        BNE.S   L0346E
        MOVE.L  (A7)+,D0
        ADDQ.W  #4,A7
@@ -4924,61 +4944,61 @@ L03488 MOVEA.L $0074(A6),A1   * test for pending I/O on any channel
        ADDA.W  A2,A2
        ADDA.L  $0078(A6),A2
        MOVEA.L A1,A3
-L0349A ADDQ.W  #4,A1
+L0349A ADDQ.W  #4,A1          * loop
        CMPA.L  A2,A1
        BLE.S   L034A4
        MOVEA.L $0078(A6),A1
-L034A4 TST.B   (A1)
+L034A4 TST.B   (A1)           * valid entry ?
        BLT.S   L034B0
        MOVEA.L (A1),A0
-       MOVE.B  $0012(A0),D4    * Jobs accumulated priority
-       BNE.S   L034B6
+       MOVE.B  $0012(A0),D4   * channel busy ?
+       BNE.S   L034B6         * -> work
 L034B0 CMPA.L  A1,A3
        BNE.S   L0349A
-       BRA.S   L03522
+       BRA.S   L03522         * rts
 
 L034B6 MOVE.L  A1,$0074(A6)  * SV.CHPNT
-       MOVE.L  $0014(A0),D1  * JOB status
+       MOVE.L  $0014(A0),D1  * CH.JOBWT
        LSL.W   #2,D1
        MOVEA.L $0068(A6),A4  * SV.JBBAS
        ADDA.W  D1,A4
        TST.B   (A4)
        BLT.S   L03524
-       MOVEA.L (A4),A4
+       MOVEA.L (A4),A4       * JOB.BASE
        SWAP    D1
-       CMP.W   $0010(A4),D1
+       CMP.W   $0010(A4),D1  * JOB.TAG
        BLT.S   L03524
-       MOVEQ   #$00,D0
-       MOVE.B  $0013(A0),D0  * jobs priority increment
-       MOVEQ   #-$01,D3
+       MOVEQ   #$00,D0           * prepare for trap#3  restart
+       MOVE.B  $0013(A0),D0      * CH.ACTN
+       MOVEQ   #-$01,D3          * restarted call
        MOVEM.L $0024(A4),D1-D2
        MOVEM.L $0044(A4),A1-A2
        MOVE.L  A4,-(A7)
        CLR.L   -(A7)
        ADDQ.B  #1,D4
-       BEQ.S   L034F6
-       MOVE.L  $0058(A4),(A7)
+       BEQ.S   L034F6            * -> not A6 relative
+       MOVE.L  $0058(A4),(A7)    * job.a6
        ADDA.L  (A7),A1
 L034F6 MOVEA.L $0004(A0),A4
        LEA     -$0018(A4),A3
        MOVEA.L $0004(A4),A4
        JSR     (A4)
-       SUBA.L  (A7)+,A1
-       MOVEA.L (A7)+,A4
+       SUBA.L  (A7)+,A1          * adjust relative
+       MOVEA.L (A7)+,A4          * JOB.BASE
        MOVE.L  D1,$0024(A4)
        MOVE.L  A1,$0044(A4)
        CMPI.B  #-1,D0
        BEQ.S   L03522
-       MOVE.L  D0,$0020(A4)
-       CLR.B   $0012(A0)    * Jobs accumulated priority
-       CLR.W   $0014(A4)
+       MOVE.L  D0,$0020(A4)      * set D0 of job
+       CLR.B   $0012(A0)         * CH.STAT
+       CLR.W   $0014(A4)         * JOB.STAT
 L03522 RTS
 
-L03524 CLR.B   $0012(A0)    * Jobs accumulated priority
+L03524 CLR.B   $0012(A0)    * CH.STAT
        RTS
 
-* MDV_Motor on
 
+* MDV_Motor on
 L0352A MOVEM.L D0-D3/A0-A4,-(A7)
        MOVEQ   #$00,D1
        MOVE.B  (A1),D1
@@ -4993,100 +5013,104 @@ L0352A MOVEM.L D0-D3/A0-A4,-(A7)
        MOVEM.L (A7)+,D0-D3/A0-A4
        RTS
 
-* erase MDV-file
 
+*#: delete file
 L03552 ST      D3
        BSR.S   L03564
        BRA     L003A6
 
-* open MDV_channel
 
-L0355A CMPI.B  #$04,D3 (5 parameters allowed)
+*#: open DDEV channel
+L0355A CMPI.B  #$04,D3          * -1,4
        BLS.S   L03564
        MOVEQ   #-$0F,D0
        RTS
 
 L03564 MOVEM.L D1-D6/A3-A6,-(A7)
        MOVEA.L A0,A5
-       MOVE.L  #$000000A0,D1
+       MOVE.L  #$00A0,D1
        JSR     L02FAE(PC)       * MM.ALCHP
        BNE     L0368A
        ADDA.W  #$0018,A0
        LEA     $0140(A6),A1     * SV.FSLIST
        JSR     L039DC(PC)       * UT.LINK
-       LEA     (A5),A1
+       LEA     (A5),A1          * ???
        JSR     L036D4(PC)
-       BNE     L0366E
-       MOVEQ   #$0F,D2
+       BNE     L0366E           * error: unlink, dealloc
+
+       MOVEQ   #$0F,D2          * counter 16
        MOVEQ   #-$01,D0
-       LEA     $0140(A6),A4     * SV.FSLIST
+       LEA     $0140(A6),A4     * SV.FSDEF+$40
+
 L03596 MOVE.L  -(A4),D3
        BNE.S   L0359E
-       MOVE.W  D2,D0
-       BRA.S   L035AC
-
+       MOVE.W  D2,D0            * remember free place
+       BRA.S   L035AC           * next
 L0359E MOVEA.L D3,A1
-       CMP.B   $0014(A1),D1
+       CMP.B   $0014(A1),D1     * drive# =?
        BNE.S   L035AC
-       CMPA.L  $0010(A1),A2
+       CMPA.L  $0010(A1),A2     * this driver ?
        BEQ.S   L035DC
 L035AC DBF     D2,L03596
-       MOVE.W  D0,D2
+
+       MOVE.W  D0,D2            * found free pointer ?
        BLT     L0366C
-       MOVEM.L D1-D2/A0/A2,-(A7)
+       MOVEM.L D1-D2/A0/A2,-(A7)    * alloc new drive def block
        MOVE.L  $0020(A2),D1
        JSR     L02FAE(PC)   * MM.ALCHP
        MOVEM.L (A7)+,D1-D2/A1-A2
        EXG     A1,A0
        BNE     L0366E
-       MOVE.L  A2,$0010(A1)
-       MOVE.B  D1,$0014(A1)
+       MOVE.L  A2,$0010(A1)     * driver
+       MOVE.B  D1,$0014(A1)     * drive#
        MOVE.W  D2,D0
        LSL.W   #2,D0
        ADDA.W  D0,A4
-       MOVE.L  A1,(A4)
-L035DC MOVE.B  D2,$0005(A0)
-       MOVE.B  $000B(A7),$0004(A0)
-       LEA     $001A(A0),A4
+       MOVE.L  A1,(A4)          * set SV.FSDEF table entry
+
+L035DC MOVE.B  D2,$0005(A0)     * chdef+$18+$5
+       MOVE.B  $000B(A7),$0004(A0)  * delete(-1) or D3 code
+       LEA     $001A(A0),A4     * +$18, save name in channel defblock
        MOVE.W  (A5)+,D0
        MOVE.W  $0024(A2),D3
-       ADDQ.W  #2,D3
+       ADDQ.W  #2,D3            * drv namelen
        ADDA.W  D3,A5
        SUB.W   D3,D0
        BLT.S   L03660
-       CMPI.W  #$0024,D0
+       CMPI.W  #$0024,D0        * maxlen 36 + drive#_
        BGT.S   L03660
        MOVE.W  D0,(A4)+
        BRA.S   L03604
 
-L03602 MOVE.B  (A5)+,(A4)+
+L03602 MOVE.B  (A5)+,(A4)+      * copy name
 L03604 DBF     D0,L03602
        MOVEA.L A1,A5
        MOVEA.L A0,A1
-L0360C MOVEA.L (A1),A1
+L0360C MOVEA.L (A1),A1          * next linked  channel
        MOVE.L  A1,D0
-       BEQ.S   L03652
-       CMP.B   $0005(A1),D2
+       BEQ.S   L03652           * no more ..., find file
+       CMP.B   $0005(A1),D2     * same drive?
        BNE.S   L0360C
-       MOVEQ   #$01,D0
-       MOVEA.W #$001A,A6
+       MOVEQ   #$01,D0          * compare file names
+       MOVEA.W #$001A,A6            * name offset
        JSR     L03A9C(PC)           * UT.CSTR
-       MOVEA.L $0024(A7),A6
-       BNE.S   L0360C
+       MOVEA.L $0024(A7),A6         * restore
+       BNE.S   L0360C               * not same file
+
        CMPI.B  #$02,$0004(A0)
-       BEQ.S   L03664
+       BEQ.S   L03664               * already exists
        CMPI.B  #$01,$0004(A0)
-       BNE.S   L03668
+       BNE.S   L03668               * in use
        CMPI.B  #$01,$0004(A1)
        BNE.S   L03668
-       MOVE.W  $0006(A1),$0006(A0)
+       MOVE.W  $0006(A1),$0006(A0)  * read only, copy info
        MOVE.L  $000C(A1),$000C(A0)
        MOVE.W  #$0040,$000A(A0)
-L03652 MOVEA.L A5,A1
-       TST.W   $0006(A0)
-       BEQ.S   L03690
+L03652 MOVEA.L A5,A1                * drive def
+       TST.W   $0006(A0)            * file already located ?
+       BEQ.S   L03690               * -> no, find it
        SUBA.W  #$0018,A0
-       BRA.S   L03684
+       BRA.S   L03684               * ok, return
 
 L03660 MOVEQ   #-$0C,D0
        BRA.S   L0366E
@@ -5111,9 +5135,9 @@ L03684 ADDQ.B  #1,$0022(A1)
 L0368A MOVEM.L (A7)+,D1-D6/A3-A6
        RTS
        
-* LOOK FOR MDV_DIRECTORY
 
-L03690 SUBA.W  #$0018,A0
+*#: call ddev_open
+L03690 SUBA.W  #$0018,A0            *
        MOVE.L  A1,-(A7)
        MOVE.L  A2,-(A7)
        LEA     -$0018(A2),A3
@@ -5121,72 +5145,73 @@ L03690 SUBA.W  #$0018,A0
        JSR     (A4)
        MOVEA.L (A7)+,A2
        MOVEA.L (A7)+,A1
-       TST.B   $001C(A0)
+       TST.B   $001C(A0)            * delete file ?
        BLT.S   L036B0
        TST.L   D0
-       BEQ.S   L03684
+       BEQ.S   L03684               * success
 L036B0 ADDA.W  #$0018,A0
-       BRA.S   L0366E
+       BRA.S   L0366E               * return D0
 
-* FORMAT SECTORED MEDIUM 
 
+*#: FORMAT SECTORED MEDIUM
 L036B6 MOVEM.L D3-D7/A1-A5,-(A7)
        MOVEA.L A0,A1
        JSR     L036D4(PC)
        BLT.S   L036CC
        LEA     -$0018(A2),A3
        MOVEA.L $001C(A2),A4
-       JSR     (A4)
+       JSR     (A4)                 * dev_format
 L036CC MOVEM.L (A7)+,D3-D7/A1-A5
        BRA     L003A6
 
-* VERIFY NAME
 
+* VERIFY NAME
+*#: find drive a1=file_name< >a2 driver > d1=drive#num
 L036D4 MOVEM.L A1/A4,-(A7)
        MOVEA.L $0048(A6),A2   * SV.DDLST
-L036DC LEA     $0024(A2),A4
+L036DC LEA     $0024(A2),A4   * DRIVE namelen
        MOVE.W  (A4)+,D0
        MOVEA.L (A7),A1
        ADDQ.W  #2,A1
 L036E6 MOVE.B  (A1)+,D1
-       BCLR    #$05,D1
+       BCLR    #$05,D1        * uppercase
        CMP.B   (A4)+,D1
-       BNE.S   L036F6
+       BNE.S   L036F6         * try next driver
        SUBQ.W  #1,D0
        BGT.S   L036E6
-       BRA.S   L036FE
+       BRA.S   L036FE         * drive name matches
 
 L036F6 MOVEA.L (A2),A2
-       MOVE.L  A2,D0
+       MOVE.L  A2,D0          * next driver
        BNE.S   L036DC
-       BRA.S   L03718
+       BRA.S   L03718         * no more drivers
 
 L036FE MOVEQ   #$00,D1
        MOVE.B  (A1)+,D1
-       SUBI.B  #$30,D1
+       SUBI.B  #$30,D1        * 1<=drive number<=8
        BLE.S   L03718
        CMPI.B  #$09,D1
        BGE.S   L03718
-       CMPI.B  #$5F,(A1)
+       CMPI.B  #$5F,(A1)      * '_'
        BNE.S   L03718
        MOVEQ   #$00,D0
-       BRA.S   L0371A
+       BRA.S   L0371A         * ok, rts
 
 L03718 MOVEQ   #-$07,D0
 L0371A MOVEM.L (A7)+,A1/A4
        RTS
 
-* ALIGN ADRESS
 
+*#: a2= (a2+1)& (not 1)
 L03720 MOVE.L  A2,D2
        ADDQ.L  #1,D2
        BCLR    #$00,D2
        MOVEA.L D2,A2
        RTS
 
-* ANALYSE SYNTAX 
 
-L0372C MOVEA.L (A7),A2    * IO.DECODE
+* ANALYSE SYNTAX
+L0372C MOVEA.L (A7),A2              * IO.DECODE
        ADDQ.W  #6,A2
        MOVEM.L D4/D7/A0/A3,-(A7)
        MOVEQ   #$00,D7
@@ -5266,8 +5291,9 @@ L037B6 MOVEQ   #$00,D1
 L037C8 ADDQ.W  #1,A0
        RTS
 
-* DIRECT FILE HANDLING
 
+* DIRECT FILE HANDLING
+* queue routines
 L037CC LEA     $0018(A0),A2   * pipe#  I / O
        CMPI.B  #$03,D0
        BLS.S   L037D8
@@ -5284,7 +5310,6 @@ L037D8 TST.L   (A2)
 L037F0 MOVEQ   #-$0F,D0
        RTS
 
-* install file and place extensions
 
 L037F4 LEA     $10(A2,D1.W),A3  * IO.QSET
        CLR.L   (A2)+
@@ -5295,8 +5320,8 @@ L037F4 LEA     $10(A2,D1.W),A3  * IO.QSET
        SUBA.L  #$10,A2
        RTS
 
-* test status of file
-        
+
+* test status of queue
 L0380A 
 XL0380A EQU L0380A
        MOVEQ   #-$11,D2         * IO.QTEST
@@ -5372,7 +5397,7 @@ L03888 TAS     (A2)             * IO.QEOF
 
 * Vector EA
 
-L0388C ADDI.L  #$0000000C,(A7)   * IO.SERIO - d0 werte wie trap 3
+L0388C ADDI.L  #$0000000C,(A7)   * IO.SERIO - d0 as trap 3
        MOVEA.L (A7),A4
        MOVE.L  D2,D4
        MOVE.L  D1,D5
@@ -6014,8 +6039,8 @@ L03DB6 MOVEQ   #$0A,D1
 L03DB8 MOVE.L  #$0000081F,D0
        JMP     L04830(PC)
 
-* vector 102 number to ASCII
-
+* vector 102 ASCII to int
+* CN.DTOI
 L03DC2 MOVEM.L D3-D6/A0-A1,-(A7)
        BSR     L03CEE
        BNE.S   L03DB0
@@ -6152,7 +6177,7 @@ L03EDE BTST    D0,$00(A6,A1.L)
        RTS
 
 * vector F0
-
+* float to ASCII
 L03EF6 MOVEM.L D2-D5,-(A7)   * CN.FTOD
        MOVE.L  A0,-(A7)
        TST.L   $02(A6,A1.L)
@@ -6162,12 +6187,12 @@ L03EF6 MOVEM.L D2-D5,-(A7)   * CN.FTOD
        BGE.S   L03F18
        MOVE.B  #$2D,$00(A6,A0.L)
        ADDQ.W  #1,A0
-       JSR     L04A0C(PC)
+       JSR     L04A0C(PC)                    * float NEG
 L03F18 CMPI.L  #$081B5F60,$00(A6,A1.L)
        BLT.S   L03F2C
        ADDQ.W  #1,D4
        BSR.S   L03F40
-       JSR     L0497E(PC)
+       JSR     L0497E(PC)                    * float DIV
        BRA.S   L03F18
 
 L03F2C CMPI.L  #$08184C4C,$00(A6,A1.L)
@@ -6429,7 +6454,7 @@ L0B352 ANDI.W #$0007,D2
        BEQ.S  L0B368
        RTS
       
-L0B368 Movem.l D3/D4/D5/A3,-(A7)
+L0B368 movem.l D3/D4/D5/A3,-(A7)
        LEA      L0B458,A3            * keyboard - table
        MOVE.W   $8(A3),D4
        LEA.L    $0(A3,D4.W),A3

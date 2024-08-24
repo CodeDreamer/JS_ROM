@@ -6,7 +6,7 @@
 *
 *******************************
 
-* initialise
+* initialise basic, search for ROMS, display F1/F2 menu
 L04A74 BRA.S   L04AAA 
 XL04A74 EQU L04A74
 L04A76 CMPI.L  #$4AFB0001,(A3)
@@ -190,7 +190,7 @@ L04C4E BRA.S   L04BFA
 
 L04C50 MOVEQ   #$02,D0  * CLOSE MDV1_BOOT
        TRAP    #$02
-       CLR.L   $0084(A6)
+       CLR.L   $0084(A6)    * command channel=0
        TST.W   $0088(A6)    * LINE TO EXECUTE ?
        BLT     L04D6A       * NO
        BRA     L04D9E       * YES
@@ -198,11 +198,11 @@ L04C50 MOVEQ   #$02,D0  * CLOSE MDV1_BOOT
 L04C64 TAS     $008F(A6)    * initialise BREAK
        MOVE.L  A1,D1
        SUB.L   (A6),D1
-       SF      $00B9(A6)
+       SF      $00B9(A6)    * BV.ARROW
        MOVE.B  -$01(A6,A1.L),D0
        SUBI.B  #$D0,D0
        BCS.S   L04C86
-       ST      $00B9(A6)
+       ST      $00B9(A6)    * BV.ARROW
        BEQ.S   L04C86
        MOVE.B  #$01,$00B9(A6)
 L04C86 SUBQ.W  #1,D1
@@ -254,23 +254,23 @@ L04CFA MOVEA.L $0084(A6),A0
        RTS
 
 * supervisor for direct commands
-
-L04D02 MOVEA.L $0008(A6),A4
-       MOVE.B  #$01,$006C(A6)
-       SF      $006E(A6)
-       ST      $006D(A6)
-L04D14 ST      $006F(A6)
-       CLR.L   $0068(A6)
+* enter command mode
+L04D02 MOVEA.L $0008(A6),A4         * BV.TKBAS
+       MOVE.B  #$01,$006C(A6)       * BV.STMNT
+       SF      $006E(A6)            * BV.INLIN
+       ST      $006D(A6)            * BV.CONT
+L04D14 ST      $006F(A6)            * BV.SING
+       CLR.L   $0068(A6)            * BV.LINUM
        JSR     L0A4BA(PC)
        JSR     L0A8B8(PC)
        BNE     L04C44
-       TST.B   $008B(A6)
+       TST.B   $008B(A6)            * BV.COMLN
        BEQ.S   L04D5E
-       SUBQ.W  #4,$008C(A6)
+       SUBQ.W  #4,$008C(A6)         * BV.STOPN
        BEQ.S   L04CF6
        BLT.S   L04D14
-       MOVEA.L $0008(A6),A0
-       MOVE.L  $000C(A6),D0
+       MOVEA.L $0008(A6),A0         * BV.TKBAS
+       MOVE.L  $000C(A6),D0         * BV.TKTOP
        SUBA.L  A0,A4
        SUB.L   A0,D0
        MOVE.L  D0,D1
@@ -309,7 +309,7 @@ L04D86 MOVE.W  (A7)+,$00(A6,A0.L)
 L04D98 BSR     L04CFA   * store channel ID
        BNE.S   L04D66   * not #0
 L04D9E JSR     L0A4BA(PC)       * init variables and procs
-       MOVEA.L $0010(A6),A4
+       MOVEA.L $0010(A6),A4     * BV.PFBAS
        SF      $006F(A6)
        CLR.L   $0068(A6)
        MOVE.B  #$01,$006C(A6)
@@ -367,7 +367,7 @@ L04E2A DC.W    $0100  * table for memory reservation
 
 * !!! table above and command below are fuzzy - in all cases same amount
 * of memory is reserved so it can be shortened - instead of 
-* first for lines only move.l #$0100,d1 would be sufficient !!!
+* first four lines only move.l #$0100,d1 would be sufficient !!!
  
 L04E32 LEA     L04E2A(PC),A1
        ADD.W   D0,D0
