@@ -17,7 +17,7 @@
 * IN FACT, I'M QUITE SURE THAT NOW EVERYTHING IS WORKING IN ANY 
 * CONIGURATION IF YOU KEEP IN MIND THAT SOME CODE RETURNS WITH
 * MANIPLUATED STACK - SEE ADDER ON MDV-VECTORS: THERE ARE THREE
-* POSSIBLE REUTRNS SOMETIMES.
+* POSSIBLE RETURNS SOMETIMES.
 * Don't write to me with 'just one question' on details.
 * I think the disassembly is enough work.
 *
@@ -91,7 +91,7 @@
 * BUT: THE JM-ROUTINES MIGHT HAVE A BUG. SO TRY IT WITH
 * CAUTION. 
 * ON TRA_TAB: SINCE I WORK ON MY QL WITH EPROMS AND LOST MY ORIGINAL
-* JS-FILE IT MIGHT BE WORTH, ADAPTING THAT PIECE OF BYTES EXACTLS
+* JS-FILE IT MIGHT BE WORTH, ADAPTING THAT PIECE OF BYTES EXACTLY
 * TO YOUR PRINTER. AS IT IS, IT WORKS PERFECTLY WELL WITH THE 
 * BROTHER EP 44 PRINTER IN T/W MODE - AT LEAST WITH THE VERSION THAT
 * HAS BEEN DELIVERED IN SWITZERLAND.
@@ -126,7 +126,7 @@ o030   BSR.S   L00050
 o032   BSR.S   L00050
 o034   BSR.S   L00050
 o036   BSR.S   L00050
-0o38   BSR.S   L00050
+o038   BSR.S   L00050
        BSR.S   L00050
        BSR.S   L00050
        BSR.S   L00050
@@ -313,7 +313,7 @@ L001C2 CMP.L   (A5),D2
        BNE.S   L0019C
        MOVE.L  #XL04A74,A1  * Startadress of BASIC
        LEA     $00028000,A6 * Startadress of sysvars
-       LEA     $0480(A6),A7 * top of suerivsor-stack
+       LEA     $0480(A6),A7 * top of supervisor-stack
        LEA     $00018020,A3   * statusregister of 8049
        MOVE.B  #$08,$0043(A3) * initialise 8049 to mode 8
        SF      -$001E(A3)
@@ -332,16 +332,16 @@ L001C2 CMP.L   (A5),D2
        MOVE.L  $0020(A6),D0     * !!! look for previous comment !!
 * as the ROM is now A5 still is the same as 20(A6) but if value
 * of A5 would have been changed this was correct.
-       SUB.L   A6,D0            * ramtop-$2800 /64
+       SUB.L   A6,D0            * ramtop-$28000/64  
        LSR.L   #6,D0
-       MOVEA.L A7,A3            * A3 = pointer ro supervisor stack
+       MOVEA.L A7,A3            * A3 = pointer to supervisor stack
        LEA     $0054(A6),A4     * A4 = SV.BPNT
        BSR.S   L00250           * initialise table of slave-blocks
        LSR.L   #1,D0
        ADD.L   D0,$0054(A6)
        LSR.L   #2,D0            * D0 now ramtop-$2800/512
        ADDI.L  #$20,D0
-       CMPI.W  #$01E0,D0        * compare wit 480
+       CMPI.W  #$01E0,D0        * compare with 480
        BLS.S   L00246           * if less - use that value
        MOVE.W  #$01E0,D0        * if more: use only 480 (=$1E0)
 L00246 BSR.S   L00250           * init job table
@@ -417,7 +417,7 @@ L00286 MOVE.B  D0,(A4)       * place FF00 0000 0000 0000 in all
        JMP     (A1)          * A1 = XL04A74=BASIC-START
 *                              find init roms, display F1/F2, do basic
 
-LTRAP0 ADDQ.W  #2,A7         * decrement user stack
+LTRAP0 ADDQ.W  #2,A7         * discard saved status register
        RTS
        
 XLTRAP0 EQU LTRAP0
@@ -434,7 +434,7 @@ LTRAP4 BSR.S   L00336      * initialise A5 and A6
        BRA     L03432      * Trap4 continues
 XLTRAP4 EQU LTRAP4
 
-L00336 SUBQ.W  #8,A7       * initialise of A5 and A6
+L00336 SUBQ.W  #8,A7       * initialising of A5 and A6 and D0 to Bytes
        MOVE.L  $0008(A7),-(A7)
        MOVEM.L D7/A5-A6,$0004(A7)
        MOVEA.L #$00028000,A6
@@ -443,25 +443,26 @@ L00336 SUBQ.W  #8,A7       * initialise of A5 and A6
        AND.L   D7,D0
        RTS
 
-L00352 MOVEM.L D7/A5-A6,-(A7)       *#: ext2int entry
+L00352 MOVEM.L D7/A5-A6,-(A7)   * INTERRUPT 2 handler
 XL00352 EQU L00352
+
        MOVEA.L A7,A5
        MOVEA.L #$00028000,A6
        MOVE.B  $00018021,D7
        LSR.B   #1,D7
-       BCS     L02ABC
+       BCS     L02ABC       * gap interrupt
        LSR.B   #1,D7
-       BCS     L02CCC               * 8049 interrupt
+       BCS     L02CCC       * interface (8049) interrupt
        LSR.B   #1,D7
-       BCS     L02CD8
+       BCS     L02CD8       * transmit interrupt
        LSR.B   #1,D7
-       BCS     L00900               * do poll loop
+       BCS     L00900       * frame (poll) interrupt
        LSR.B   #1,D7
        BCC.S   L003A0
-       MOVEM.L D0-D6/A0-A4,-(A7)
+       MOVEM.L D0-D6/A0-A4,-(A7)    * external interrupt
        MOVEQ   #$00,D0
-       MOVEA.L $0038(A6),A0        * interrupt list
-       JSR     L00A9E(PC)          * execute interrupt tasks
+       MOVEA.L $0038(A6),A0        * polled list
+       JSR     L00A9E(PC)          * execute polled tasks
        MOVE.B  $0035(A6),D7
        ORI.B   #$10,D7
        MOVE.B  D7,$00018021
@@ -469,7 +470,7 @@ XL00352 EQU L00352
 L003A0 BRA     L003B6              * rte
 
 *#: ret from syscall, clear d0
-L003A4 MOVEQ   #$00,D0
+L003A4 MOVEQ   #$00,D0         * back from interrupt
 *#: ret from syscall
 L003A6 BTST    #$05,$000C(A7)  * was it supervisor-mode?
        BNE.S   L003B6
@@ -496,7 +497,7 @@ L003D8 BSR.S   L003E4  * is valid job?
        BEQ.S   L003D6
        MOVEQ   #-$02,D0  * invalid job
        ADDQ.W  #4,A7
-       BRA.L   L003A6  * return
+       BRA.L   L003A6  * end of interrupt
 
 * D1= jobid
 * returns JOB.BASE in a0, ^Z flag if fails
@@ -612,8 +613,8 @@ XLtr1d03  EQU TR1d03
 * Info on QDOS
 TR1d00
 XLtr1d00 EQU TR1d00
-o4C2   MOVEQ   #-$01,D1   * get Job-ID
-       JSR     L003BC(PC)
+o4C2   MOVEQ   #-$01,D1   * sets Job-ID
+       JSR     L003BC(PC) * 
        MOVE.L  $BFF6,D2   * D2 = Nr. of version
        MOVEA.L A6,A0
        BRA     L003A4
@@ -682,8 +683,8 @@ L0055E TST.B   (A4)        * free entry ?
        ADDQ.W  #1,D7
        ADDQ.W  #4,A4       * next job
        CMPA.L  $006C(A6),A4 * too far
-       BLT.S   L0055E       * try next table entry
-       MOVEQ   #-$02,D0     * job table too small
+       BLT.S   L0055E       * no - continue testing
+       MOVEQ   #-$02,D0     * invalid job
        BRA.S   L005E0
 
 * activate job
@@ -745,13 +746,14 @@ o5EA   JSR     L003BC(PC)    * returns bas addr. in A0; ID in D1
        MOVE.L  D1,D0
 L005F0 TST.B   $0013(A0)  * jobs priority increment
        BNE     L006C0        * 'not complete'
-       JSR     L006C6(PC)    * look for next job in tree
-       TST.L   D1
-       BNE.S   L005F0        *   ... for all jobs in tree
+       JSR     L006C6(PC)    * look for next job
+       TST.L   D1            * same owner?
+       BNE.S   L005F0        * continue
        MOVE.L  D0,D1         * restore D1 (JOB-ID)
 * none active so far, fall through
 
-* mt.frjob
+* mt.frjob       
+* suspend active job
 TR1d05
 XLtr1d05 EQU TR1d05
        JSR     L003BC(PC)    * returns bas addr. in A0
@@ -959,7 +961,7 @@ XLtr1d17 EQU TR1d17
        SUB.L   D1,$0014(A6)      * SV TRNSP
        JSR     L031C8(PC)        * Release memory
        MOVE.L  (A7)+,$0014(A6)   * SV TRNSP
-       BRA.S   L007BE         * !!! memory saving but time waisting
+       BRA.S   L007BE         * !!! memory saving but time wasting
 L007BC ADDQ.W  #4,A7
 L007BE BRA     L003A6
 
@@ -1052,7 +1054,7 @@ L0088C CMP.W   (A0)+,D1         * compare table with selecte rate
 L00896 MOVEM.L (A7)+,D2/D6/A0-A2
        BRA     L003A6
 
-L0089E MOVE.L  #$4B0,D0         * dezimal 1200
+L0089E MOVE.L  #$4B0,D0         * decimal 1200
        DIVU    D1,D0            * d0=$4b0/baudrate
        ADDQ.W  #1,D0
        MOVE.W  D0,$00A8(A6)    * SV.TIMOV
@@ -1062,10 +1064,10 @@ L0089E MOVE.L  #$4B0,D0         * dezimal 1200
        ANDI.B  #$F8,(A2)
        OR.B    D2,(A2)
        MOVE.B  (A2),-$0001(A1)
-       MOVEQ   #$0D,D0        * cammand 0D = serial settings
-       JSR     L02F7C(PC)     * command for 8079
+       MOVEQ   #$0D,D0         * command 0D = serial settings
+       JSR     L02F7C(PC)      * command for 8049
        MOVE.B  D2,D0
-       JSR     L02F7C(PC)     * command for 8079
+       JSR     L02F7C(PC)      * command for 8049
        ANDI.W  #$F8FF,SR
        MOVEQ   #$00,D0
        BRA.S   L00896
@@ -1107,7 +1109,7 @@ XLtr1d23 EQU TR1d1b
 
 L008F2 ADD.W   D0,D0
        LEA     $02(A6,D0.W),A1
-       JSR     L039E2(PC)    * UT.UNLNK
+       JSR     L039E2(PC)      * UT.UNLNK
 L008FC BRA     L003A4
 
 
@@ -1119,7 +1121,7 @@ L0090A MOVEM.L D0-D6/A0-A4,-(A7)
        MOVEQ   #-$08,D0
        MOVEQ   #$01,D3
        MOVEA.L $003C(A6),A0    * SV.PLIST
-       JSR     L00A9E(PC)      * execute poll tasks
+       JSR     L00A9E(PC)      * execute polled tasks
        MOVEM.L (A7)+,D0-D6/A0-A4
        MOVE.B  $0035(A6),D7    * SV.PCINT
        ORI.B   #$08,D7
@@ -1153,9 +1155,9 @@ TR1d09
 XLtr1d09 EQU TR1d09
 * reactivate job
        JSR     L003BC(PC)    * returns bas addr. in A0
-       TST.W   $0014(A0)  * JOB status
+       TST.W   $0014(A0)     * JOB status
        BEQ.S   L0098A
-       CLR.W   $0014(A0)  * JOB status
+       CLR.W   $0014(A0)     * JOB status
        MOVE.L  $000C(A0),D0  * Adder S. 337
        BEQ.S   L0098A
        MOVEA.L D0,A0
@@ -1194,7 +1196,7 @@ L009D0 MOVEQ   #-$01,D0
 
 * scheduler aux subroutines
 
-* save jobs registers into jobheader
+* save jobs registers into job header
 L009D4 MOVE.L  A6,-(A7)
        MOVEA.L $0064(A6),A6  * SV.JBPNT
        MOVEA.L (A6),A6
@@ -1216,31 +1218,31 @@ L009E8 MOVEM.L D0-D7/A0-A4,$0020(A6) * save regs into jobheader
 * D0=-2 if none ready
 L00A0C MOVEQ   #-$02,D0
        MOVEQ   #$00,D1
-       MOVEA.L $0064(A6),A2   * SV.JBPNT
-       MOVEA.L A2,A4          * a4= current job
-       MOVE.W  $0062(A6),D2   * SV.JBMAX
+       MOVEA.L $0064(A6),A2     * SV.JBPNT
+       MOVEA.L A2,A4            * a4= current job
+       MOVE.W  $0062(A6),D2     * SV.JBMAX
        LSL.W   #2,D2
-       MOVEA.L $0068(A6),A3   * SV.JBBAS
+       MOVEA.L $0068(A6),A3     * SV.JBBAS
        ADDA.W  D2,A3
 
-L00A22 ADDQ.W  #4,A2          * a2= currently examined job
-       CMPA.L  A3,A2          * >SV.JBMAX ?
+L00A22 ADDQ.W  #4,A2            * a2= currently examined job
+       CMPA.L  A3,A2            * >SV.JBMAX ?
        BLE.S   L00A2C
-       MOVEA.L $0068(A6),A2   *  ... wrap search
-L00A2C TST.B   (A2)           * valid job ?
-       BLT.S   L00A72         * no ->
+       MOVEA.L $0068(A6),A2     *  ... wrap search
+L00A2C TST.B   (A2)             * valid job ?
+       BLT.S   L00A72           * no ->
        MOVEA.L (A2),A0
-       TST.B   $0013(A0)    * jobs priority increment
-       BEQ.S   L00A72       * 0 -> no chance
-       TST.W   $0014(A0)    * JOB status
-       BEQ.S   L00A54       * -> runnable
-       BLT.S   L00A72       * -> indefintely suspended, try next
-       SUB.W   D3,$0014(A0)  * decrement timeout by SV.POLLM
-       BGT.S   L00A72        * -> still suspended
-       CLR.W   $0014(A0)     * make sure it doesn't get suspended by accident
-       MOVE.L  $000C(A0),D2  * JOB.HOLD
+       TST.B   $0013(A0)        * jobs priority increment
+       BEQ.S   L00A72           * 0 -> no chance
+       TST.W   $0014(A0)        * JOB status
+       BEQ.S   L00A54           * -> runnable
+       BLT.S   L00A72           * -> indefintely suspended, try next
+       SUB.W   D3,$0014(A0)     * decrement timeout by SV.POLLM
+       BGT.S   L00A72           * -> still suspended
+       CLR.W   $0014(A0)        * make sure it doesn't get suspended by accident
+       MOVE.L  $000C(A0),D2     * JOB.HOLD
        BEQ.S   L00A54
-       MOVEA.L D2,A1         * release flag
+       MOVEA.L D2,A1            * release flag
        SF      (A1)
 L00A54 MOVE.B  $0012(A0),D2     * Jobs accumulated priority
        BEQ.S   L00A64
@@ -1272,7 +1274,7 @@ L00A78 MOVEA.L $0064(A6),A0  * SV.JBPNT
        RTE
 
 *  execute linked tasks (extint,poll,sched)
-*  A0= list
+*  A0 = list
 L00A9E MOVE.W  D0,-(A7)
 L00AA0 MOVEA.L A0,A3
        ADDA.W  (A7),A3        * offset to driver address
@@ -1381,7 +1383,7 @@ L00B9C BSR.S   L00BAA
        RTS
 
 L00BAA 
-       MOVE.L  A0,-(A7)   * serial I/O
+       MOVE.L  A0,-(A7)      * serial I/O
        MOVEA.L A4,A3
        JSR     L02C72(PC)    * execute command to 8049
        MOVEA.L (A7)+,A0
@@ -1440,8 +1442,8 @@ WEVEN  BSR.S   L00C76
        BRA.S   L00BF4
 XWEVEN EQU WEVEN
 L00C24 LEA     $0020(A0),A2  * pointer to buffer
-       JSR     L0385E(PC)    * IO.QOUT
-       BNE.S   L00C74
+       JSR     L0385E(PC)    * IO.QOUT: exctract byte from queue
+       BNE.S   L00C74        * empty (NC) or EOF
        MOVE.W  $001A(A0),D3
        MOVE.B  L00C3A(PC,D3.W),D3
        JMP     L00C3A(PC,D3.W)
@@ -1515,7 +1517,7 @@ o00CA6 DC.W    $0004
 L00CB2 MOVE.W  (A7),D1       * any length ?
        BEQ.S   L00CD2
        ADDI.W  #$31,D1
-       JSR     L02FAE(PC)    * MM.ALCHP
+       JSR     L02FAE(PC)   * MM.ALCHP
        BNE.S   L00D00
        MOVE.W  (A7),D1
        ADDQ.W  #1,D1
@@ -1549,7 +1551,7 @@ L00D04 MOVEQ   #-$0F,D0
        RTS
 
 * close
-L00D0A TST.L   $0018(A0)
+L00D0A TST.L   $0018(A0)   * is channel open?
        BNE.S   L00D1C
        LEA     $0020(A0),A2  * pointer to buffer
        TST.L   (A2)          * queue empty?
@@ -1632,7 +1634,7 @@ o00DA8 DC.W    $0003
        DC.W    16      * y-origin
 
 
-* open screen channel       
+* open screen channel (SCR/CON)    
 L00DC0 MOVEQ   #$6C,D1 * lenght of description
        BSR.S   L00DCE  * open channel
        BRA.S   L00DC8
@@ -1698,7 +1700,8 @@ L00E68 MOVEA.L (A2),A2
 L00E70 JSR     L0305E(PC)    * MT.RECHP
        RTS
 
-L00E76 TST.B   $0033(A6)     * I/O OF CON/SER screen freezed
+* I/O OF CON AND SER driver
+L00E76 TST.B   $0033(A6)     * I/O OF CON/SER screen freezed?
        BEQ.S   L00E80
        MOVEQ   #-1,D0        * not complete
        RTS
@@ -1710,28 +1713,28 @@ L00E80 CMPI.B  #$07,D0
        MOVE.W  D2,D5
        MOVE.L  D1,D4
        MOVEA.L A1,A4
-       LEA     $0068(A0),A5
-       TST.L   D3
+       LEA     $0068(A0),A5     * keyboard queue
+       TST.L   D3               * infinite timeout?
        BLT.S   L00EB0
        CMPI.B  #$04,D0
        BHI.S   L00EB0
        TST.L   (A5)
        BEQ.S   L00EEC
-       MOVEA.L $004C(A6),A2    * SV.KEYQ
-       TST.B   -$0025(A2)
+       MOVEA.L $004C(A6),A2     * SV.KEYQ
+       TST.B   -$0025(A2)       * cursor suppressed for active keyboard queue?
        BNE.S   L00EB0
-       MOVE.L  A5,$004C(A6)
+       MOVE.L  A5,$004C(A6)     * if cursor suppressed (and infinite timeout, and we are reading), we now become the active keyboard queue
 L00EB0 MOVE.B  L00EB8(PC,D0.W),D0
        JMP     L00EB8(PC,D0.W)
 
-L00EB8 DC.B   L00EC0-L00EB8   * test pending input
-       DC.B   L00EC6-L00EB8   * put byte
-       DC.B   L00F54-L00EB8
-       DC.B   L00ECA-L00EB8   * edit line
-       DC.B   L00F5A-L00EB8
-       DC.B   L00F00-L00EB8   * 
-       DC.B   L00EEC-L00EB8   * not used
-       DC.B   L00EDE-L00EB8   * put in queue
+L00EB8 DC.B   L00EC0-L00EB8     * test pending input
+       DC.B   L00EC6-L00EB8     * get byte
+       DC.B   L00F54-L00EB8     * fetch line
+       DC.B   L00ECA-L00EB8     * get string
+       DC.B   L00F5A-L00EB8     * edit line
+       DC.B   L00F00-L00EB8     * send byte
+       DC.B   L00EEC-L00EB8     * not used
+       DC.B   L00EDE-L00EB8     * put in queue
 
 *------------ general scr I/O       
 
@@ -1740,14 +1743,15 @@ L00EC0 JMP     L0380A(PC)     * IO.QTEST
 L00EC6 MOVEA.L A5,A2         * A2=buffer adress of keyboard
        JMP     L0385E(PC)    * IO.QOUT
 
+* get string
 L00ECA MOVEQ   #$00,D0
-L00ECC CMP.W   D4,D5         * all chars printed
+L00ECC CMP.W   D4,D5         * buffer full?
        BLS.S   L00EEE
        MOVEA.L A5,A2
-       JSR     L0385E(PC)    * IO.QOUT
+       JSR     L0385E(PC)    * IO.QOUT (extract byte from keyboard queue)
        BLT.S   L00EEE
-       MOVE.B  D1,(A4)+
-       ADDQ.W  #1,D4
+       MOVE.B  D1,(A4)+      * append character
+       ADDQ.W  #1,D4         * increase line length
        BRA.S   L00ECC
 
 L00EDE MOVEQ   #$00,D0
@@ -1767,6 +1771,7 @@ L00EF2 BCLR    #$07,$0042(A0)
 L00EFA MOVEQ   #$05,D0   * add one character to screen
 L00EFC JMP     L01992(PC)
 
+* send byte
 L00F00 MOVEQ   #$00,D0
        CMPI.B  #$0A,D1     * CR ?
        BEQ.S   L00F36      * add new line
@@ -1787,7 +1792,7 @@ L00F14 BSR.S   L00EFA      * put byte
        BSR.S   L00F46   * position cursor
        BRA.S   L00F42
 
-L00F36 TST.B   $0048(A0) * is curosr at end of line?
+L00F36 TST.B   $0048(A0) * is cursor at end of line?
        BGE.S   L00F3E
        BSR.S   L00F46   * position cursor
 L00F3E ST      $0048(A0)
@@ -1805,7 +1810,7 @@ L00F54 TST.L   D3
        BRA.S   L00F5E
 
 *----------------- Line editor
-        
+* edit line
 L00F5A MOVEQ   #-$01,D4    
        MOVE.W  D1,D4
 L00F5E SWAP    D1
@@ -1818,7 +1823,7 @@ L00F5E SWAP    D1
 L00F6C TST.B   $0043(A0)    * curson ?
        BLE.S   L00F76
        JSR     L01BA2(PC)   * position cursor ..
-L00F76 JSR     L01BF2(PC)   * if neccessary to start
+L00F76 JSR     L01BF2(PC)   * if necessary to start
        BSR     L010DC       * of next line
        MOVE.W  D4,D6
        SUB.W   D3,D6
@@ -1834,13 +1839,13 @@ L00F88 MOVEA.L A5,A2         * keyboard buffer
        MOVE.B  (A7)+,D1
 L00FA0 CMPI.B  #$0A,D1       * CR?
        BEQ.S   L01002
-       CMPI.B  #$1F,D1       * less 31 - do nothing
+       CMPI.B  #$1F,D1       * less than 31 - do nothing
        BLS.S   L00F88
-       CMPI.B  #$BF,D1   * higher 191 - append square
+       CMPI.B  #$BF,D1   * higher than 191 - append square
        BHI.S   L00FDA
-       MOVE.W  D4,D0   * d4 = length of line
-       SUB.W   D6,D0   * actual position
-       BRA.S   L00FBE   * store byte
+       MOVE.W  D4,D0     * d4 = length of line
+       SUB.W   D6,D0     * actual position
+       BRA.S   L00FBE    * store byte
 
 L00FB8 MOVE.B  $00(A4,D0.W),$01(A4,D0.W)   * line out
 L00FBE DBF     D0,L00FB8
@@ -2089,7 +2094,7 @@ L011F8 MOVE.B  D1,$1F(A0,D2.W)
 
 L01202 
        DC.L    L02D00   * pointer to list of scheduler tasks
-       DC.L    L0120A   * pointer to first task
+       DC.L    L0120A   * pointer to polled tasks
 
 L0120A MOVE.L  $004C(A6),D4   * SV.KEYQ
        BEQ.S   L0122E
@@ -2149,7 +2154,7 @@ L0198E BRA     L003A4
 *
 ***********************
 *
-* screen printing routine for trap 3 d0=5 or d0 = [$09 - $36]
+* screen printing routine for trap 3 d0=5 and d0 between $09 and $36
 * this routine is extremely slow - it should be speeded up
 *
 ***********************
@@ -3800,7 +3805,7 @@ L027CA CMPA.L  A1,A5
        BRA     L026C6
 
 
-L027D8 MOVEM.L D1-D2,-(A7)
+L027D8 MOVEM.L D1-D2,-(A7)    * compute color mask for color d1 and put in (a1)
        BSR.S   L0281E
        MOVE.W  D2,(A1)
        MOVE.W  D2,$0002(A1)
@@ -3848,7 +3853,7 @@ L0283E RTS
 
 L02840 MOVEM.L D0-D7/A0-A6,-(A7)
        MOVEM.L (A1),D6-D7 * D7=ink mask
-       BTST    #$00,D1    * odd adress
+       BTST    #$00,D1    * odd Y?
        BNE.S   L02852
        SWAP    D6         * invert masque
        SWAP    D7         *
@@ -3877,12 +3882,12 @@ L0286A ADDA.W  D2,A4      * get value in charlist
        MOVEA.W #-1,A5
        BTST    #$00,D3  * mode underline ?
        BEQ.S   L02892   * no
-       ADDQ.W  #2,A5
+       ADDQ.W  #2,A5    * A5=1 if underline, -1 if not
 L02892 MOVEQ   #$00,D0
        MOVEQ   #$7E,D2
        ADD.W   D2,D2    * D2 = $FC
        MOVEQ   #$00,D5
-       BTST    #$06,D3  * mode 8
+       BTST    #$06,D3  * mode double width?
        BEQ.S   L028B4
        MOVEQ   #-$01,D0
        MOVE.W  #$FFF0,D2
@@ -3891,19 +3896,19 @@ L02892 MOVEQ   #$00,D0
        BEQ.S   L028B4
        MOVE.W  #$4010,D5
        ROR.L   D1,D5
-L028B4 BTST    #$05,D3  * mode extended width
+L028B4 BTST    #$05,D3  * mode extended width?
        BEQ.S   L028BC
        ASR.B   #4,D2
 L028BC MOVEQ   #$00,D4
-       BTST    #$04,D3  * mode double height
+       BTST    #$04,D3  * mode double height?
        BEQ.S   L028C6
        MOVEQ   #-$01,D4
 L028C6 ROR.L   D1,D2
        LEA     L02924(PC),A6  * adress for printing
-       BTST    #$02,D3    * mode transparent background
+       BTST    #$02,D3    * mode transparent background?
        BEQ.S   L028E0
        LEA     L0293A(PC),A6  * adress for printing
-       BTST    #$03,D3    * XOR characters/graphics
+       BTST    #$03,D3    * XOR characters/graphics?
        BEQ.S   L028E0
        LEA     L02936(PC),A6  * adress for printing
 L028E0 MOVEA.L A1,A2      * adress on screen
@@ -3917,7 +3922,7 @@ L028E0 MOVEA.L A1,A2      * adress on screen
  
 
 L028F2 MOVEQ   #$00,D3   * loop for printing
-       CMP.W   A5,D0     * underline?
+       CMP.W   A5,D0     * underline row?
        BNE.S   L028FE
        MOVEQ   #-$01,D3
        ADDQ.W  #1,A4
@@ -3940,7 +3945,7 @@ L02914 AND.W   D2,D3
        MOVE.W  D4,D3
 L0291C MOVE.W  D3,D4
        AND.W   D7,D4
-       OR.W    D5,D4
+       OR.W    D5,D4       * or flash bits
        JMP     (A6)
 
 L02924 EOR.W   D2,D3
@@ -3963,11 +3968,11 @@ L0293A NOT.W   D3
 L02942 SWAP    D6
        SWAP    D7
        ADDA.W  #$0080,A1
-       TST.L   D4       * normal size
-       BGE.S   L02956   * yes
+       TST.L   D4       * double height?
+       BGE.S   L02956   * no
        SWAP    D3
-       BCHG    #$1E,D4
-       BNE.S   L0291C
+       BCHG    #$1E,D4  * second time?
+       BNE.S   L0291C   * if first time, write word again
 L02956 DBF     D0,L028F2
        CLR.W   D2
        ROL.L   #8,D2
@@ -4096,7 +4101,7 @@ L02CBC MOVEQ   #$02,D7
        RTE
 
 
-L02CC8 JMP     L02F7C(PC)     * command for 8079
+L02CC8 JMP     L02F7C(PC)     * command for 8049
 
 
 L02CCC MOVEM.L D0-D6/A0-A4,-(A7)    * interrupt 2 - interface
@@ -4138,19 +4143,19 @@ L02D14 MOVE    SR,-(A7)   * serial I/O
 
 L02D20 JSR     L02F6E(PC)    * returns D6=6  A0=$18020  A1=$18003
        MOVEQ   #$01,D0       * command 1 to 8049 = respond
-       JSR     L02F7C(PC)    * command for 8079
+       JSR     L02F7C(PC)    * command for 8049
        JSR     L02F9A(PC)    * receive demands
        MOVE.B  D1,D7         * d7: received byte
        BTST    #$06,D7       * bit 6=0? mdv write not allowed
        SEQ     $0094(A6)     * SV.WP
-       BTST    #$01,D7       * bit 1=1 beeper activ
+       BTST    #$01,D7       * bit 1=1 beeper active
        SNE     $0096(A6)     * SV.SOUND
        BTST    #$00,D7       * bit 0=0 keyboard-buff empty
        BEQ.S   L02D4A
        JSR     L02E58(PC)      * transfer keyboard buff
-L02D4A MOVE.L  $0098(A6),D0    * no ser# open
+L02D4A MOVE.L  $0098(A6),D0    * no ser1 open
        BEQ.S   L02D5E
-       BTST    #$04,D7    * bit 4 = 0 ser# did nothing receive
+       BTST    #$04,D7         * bit 4 = 0 ser1 did nothing receive
        BEQ.S   L02D5E
        MOVEA.L D0,A2
        MOVEQ   #$06,D5
@@ -4194,7 +4199,7 @@ L02DB2 JSR     L0385E(PC)   * IO.QOUT
        BRA.S   L02DD4
 
 L02DBE JSR     L0380A(PC)  * IO.QTEST
-       CMPI.W  #$FFF6,D0
+       CMPI.W  #$FFF6,D0   * end of file?
        BNE.S   L02E04
        TST.B   -$0063(A2)
        BLT.S   L02DD4
@@ -4245,7 +4250,7 @@ L02E4E JSR     L03838(PC)    * IO.QIN
        DBF     D4,L02E36     * continue reading
 L02E56 RTS
 
-L02E58 MOVEA.L $004C(A6),A2  * clear 8049 - keyboard buffer
+L02E58 MOVEA.L $004C(A6),A2  * clear 8049 - keyboard queue
        MOVE.L  A2,D0
        BEQ.S   L02EC0        * = no con open
        MOVEQ   #$08,D0       * command 8=read keyboard
@@ -4254,48 +4259,48 @@ L02E58 MOVEA.L $004C(A6),A2  * clear 8049 - keyboard buffer
        MOVE.B  D1,D5         * d1=d5=d4 : number of bytes in buffer
        MOVE.B  D1,D4
        ANDI.W  #$0007,D4
-       BEQ.S   L02E96    * if empty - out
+       BEQ.S   L02E96       * if empty - out
        SUBQ.W  #1,D4
-L02E76 CLR.W   $008A(A6)    * autorepeat buffer
-       JSR     L02F96(PC)    * receive ctrl alt shift
+L02E76 CLR.W   $008A(A6)    * clear autorepeat buffer
+       JSR     L02F96(PC)   * receive nibble: ctrl alt shift
        MOVE.B  D1,D2
-       JSR     L02F9A(PC)
+       JSR     L02F9A(PC)   * receive key code
        MOVEA.L $BFF2,A3
        JSR     (A3)      * convert to ASCII 
        BRA.S   L02EC4    * ctrl - space
        BRA.S   L02EC2    * no char implemented !!! change to 2ec0 !!!
-       BSR.S   L02EEC
+       BSR.S   L02EEC    * put in keyboard queue, initialize autorepeat count & buffer, process special characters (ctrl-c, ctrl-F5, capslock)
        DBF     D4,L02E76 * look for next bytes in buffer
-L02E96 BTST    #$03,D5   * if less then 8 chrs in buffer ½ end
+L02E96 BTST    #$03,D5   * any key still down? (if so handle autorepeat)
        BEQ.S   L02EBA
-       SUB.W   D3,$0090(A6)  * SV.ARCNT
+       SUB.W   D3,$0090(A6)  * SV.ARCNT: decrement autorepeat count (D3=0 for interface interrupt, D3=1 for 50/60Hz interrupt)
        BGT.S   L02EC0
        JSR     L0380A(PC)    * IO.QTEST
-       TST.L   D0            * no new entries
-       BEQ.S   L02EB2
+       TST.L   D0
+       BEQ.S   L02EB2        * do autorepeat only if queue is empty
        MOVE.W  $008A(A6),D1  * SV.ARBUF
        BEQ.S   L02EB2
-       BSR.S   L02EEC
+       BSR.S   L02EEC    * put in keyboard queue, initialize autorepeat count & buffer, process special characters (ctrl-c, ctrl-F5, capslock)
 L02EB2 MOVE.W  $008E(A6),$0090(A6) * SV.ARFRQ ½ SV.ARCNT
        RTS
 
-L02EBA MOVE.W  $008C(A6),$0090(A6) * restore autorepeat
+L02EBA MOVE.W  $008C(A6),$0090(A6) * initialize autorepeat delay
 L02EC0 RTS
 
-* !!! CHANGE ABOVE AND REMOVE - DOUBLE RTS IS NONSENS !!!
+* !!! CHANGE ABOVE AND REMOVE - DOUBLE RTS IS NONSENSE !!!
 
 L02EC2 RTS
 
 L02EC4 SF      $0033(A6)     * was ctrl-space ? clear SV.SCRST
-       MOVEA.L $0068(A6),A3  * SV.JBBAS
-       MOVEA.L (A3),A3       * SuperBasic
-       SF      $00F7(A3)        * BV.BRK
-       MOVE.W  $0014(A3),D0     * job.stat
-       BEQ.S   L02EEA           * ok ->
+       MOVEA.L $0068(A6),A3  * SV.JBBAS (base of job table)
+       MOVEA.L (A3),A3       * job 0 = SuperBASIC
+       SF      $00F7(A3)     * BV.BRK: there has been a break
+       MOVE.W  $0014(A3),D0  * job status
+       BEQ.S   L02EEA        * ok -> return if job not suspended
        ADDQ.W  #1,D0
-       BLT.S   L02EEA           * waiting for job ->
+       BLT.S   L02EEA        * waiting for job ->
        CLR.W   $0014(A3)
-       MOVE.L  $000C(A3),D0     * release flag
+       MOVE.L  $000C(A3),D0  * release flag
        BEQ.S   L02EEA
        MOVEA.L D0,A3
        SF      (A3)
@@ -4306,17 +4311,17 @@ L02EEC CMPI.W  #$00F9,D1     * ctrl-f5 ?
        SF      $0033(A6)     * SV.SCRST
        CMP.W   $0092(A6),D1  * ctrl-c ? SV.CQCH
        BEQ.S   L02F40
-       CMPI.W  #$00E0,D1    * capslock ?
+       CMPI.W  #$00E0,D1     * capslock ?
        BNE.S   L02F12
-       NOT.B   $0088(A6)    * invert capslock mode SV.CAPS
-       TST.L   $00A2(A6)    * if new: acitvate     SV.CSUB
+       NOT.B   $0088(A6)     * invert capslock mode SV.CAPS
+       TST.L   $00A2(A6)     * if new: activate     SV.CSUB
        BEQ.S   L02EC0
        LEA     $00A2(A6),A5
-       JMP     (A5)        * will return 
+       JMP     (A5)          * will return 
 
-L02F12 MOVE.W  $008C(A6),$0090(A6)    * SV.ARDEL ½ SV.ARFRQ
+L02F12 MOVE.W  $008C(A6),$0090(A6)    * SV.ARDEL ½ SV.ARFRQ: initialize autorepeat count
        MOVE.W  D1,$008A(A6)           * autorepeat - buffer
-       CMPI.B  #-1,D1
+       CMPI.B  #-1,D1        * alt+character?
        BNE.S   L02F36
        SWAP    D1
        JSR     L0380A(PC)    * IO.QTEST
@@ -4327,22 +4332,23 @@ L02F12 MOVE.W  $008C(A6),$0090(A6)    * SV.ARDEL ½ SV.ARFRQ
        LSR.W   #8,D1
 L02F36 JMP     L03838(PC)    * IO.QIN
 
-L02F3A NOT.B   $0033(A6)    * invert screen status
+L02F3A NOT.B   $0033(A6)     * invert screen status
        RTS
 
-L02F40 LEA     -$0068(A2),A0    * a0 = chbase
+* ctrl-c
+L02F40 LEA     -$0068(A2),A0    * a0 = base of CON definition
        TST.B   $0043(A0)
        BGE.S   L02F54           * cursor activ
-       JSR     L01B86           * reactivate
+       JSR     L01B86           * enable cursor
        NOP                      * !!! to conform asm !!!
        LEA     $0068(A0),A2     * pointer to Job-base
-L02F54 MOVEA.L (A2),A2
-       CMPA.L  $004C(A6),A2     * keyboard-queue ok?
+L02F54 MOVEA.L (A2),A2          * next keyboard queue / CON channel
+       CMPA.L  $004C(A6),A2     * current active keyboard queue? (if yes, we looked at all windows)
        BEQ.S   L02F6A
-       TST.B   -$0025(A2)
-       BEQ.S   L02F54
-       MOVE.L  A2,$004C(A6)     * SV.KEYQ
-       CLR.W   $AA(A6)
+       TST.B   -$0025(A2)       * SD.CURF
+       BEQ.S   L02F54           * cursor suppressed, proceed to next queue
+       MOVE.L  A2,$004C(A6)     * SV.KEYQ   this is the new keyboard queue
+       CLR.W   $AA(A6)          * flashing cursor status
        
 * omit instruction but let label !!!
 
@@ -4354,7 +4360,7 @@ L02F6E LEA     $00018003,A1     * A1 = 8049 - write reg
        LEA     $001D(A1),A0     * A0 = status-control 8049
        MOVEQ   #$06,D6
        RTS
-* command for 8079  - depends on value in D0
+* command for 8049  - depends on value in D0
 L02F7C LSL.B   #4,D0    * send command to 8049 D0 * 16
        ORI.B   #$08,D0  * bit 3 = 1
 L02F82 LSL.B   #1,D0
@@ -4467,6 +4473,7 @@ L03056 MOVEQ   #$00,D0
 L0305A ADDQ.W  #4,A7
        RTS
 
+* MT.RECHP
 * MT.FREE find largest free space
 L0305E MOVE.L  (A0),D1
        LEA     $0008(A6),A1  * SV.CHPFR
@@ -4760,7 +4767,7 @@ L032B4 SUBQ.B  #1,D0
        BRA     L003A6
 
 
-* trap2, open
+* trap2, D0=1 (open)
 L032D0 MOVEM.L A1-A4,-(A7)
        MOVEA.L A0,A1
        JSR     L003BC(PC)    * returns bas addr. in A0, jobid in d1
@@ -4797,12 +4804,12 @@ L0331E MOVE.L  A0,(A3)
        MOVE.W  $0070(A6),D2   * SV.CHTAG
        ADDQ.W  #1,$0070(A6)
        ADDQ.W  #4,A0
-       MOVE.L  A2,(A0)+
-       MOVE.L  D1,(A0)+
-       MOVE.L  A3,(A0)+
-       MOVE.W  D2,(A0)+
-       CLR.W   (A0)+
-       CLR.L   (A0)+
+       MOVE.L  A2,(A0)+       * Address of driver
+       MOVE.L  D1,(A0)+       * Owner Job
+       MOVE.L  A3,(A0)+       * Address to be sent when space released
+       MOVE.W  D2,(A0)+       * Channel ID (tag)
+       CLR.W   (A0)+          * Status = OK
+       CLR.L   (A0)+          * No Job waiting on I/O
        SWAP    D2
        SUBA.L  $0078(A6),A3   * SV.CHBAS
        MOVE.W  A3,D2
@@ -4997,8 +5004,8 @@ L03522 RTS
 L03524 CLR.B   $0012(A0)    * CH.STAT
        RTS
 
-
 * MDV_Motor on
+
 L0352A MOVEM.L D0-D3/A0-A4,-(A7)
        MOVEQ   #$00,D1
        MOVE.B  (A1),D1
@@ -5028,7 +5035,7 @@ L0355A CMPI.B  #$04,D3          * -1,4
 
 L03564 MOVEM.L D1-D6/A3-A6,-(A7)
        MOVEA.L A0,A5
-       MOVE.L  #$00A0,D1
+       MOVE.L  #$000000A0,D1    * Allocate file system channel definition block
        JSR     L02FAE(PC)       * MM.ALCHP
        BNE     L0368A
        ADDA.W  #$0018,A0
@@ -5040,37 +5047,35 @@ L03564 MOVEM.L D1-D6/A3-A6,-(A7)
 
        MOVEQ   #$0F,D2          * counter 16
        MOVEQ   #-$01,D0
-       LEA     $0140(A6),A4     * SV.FSDEF+$40
-
+       LEA     $0140(A6),A4     * SV.FSLIST
 L03596 MOVE.L  -(A4),D3
        BNE.S   L0359E
-       MOVE.W  D2,D0            * remember free place
+       MOVE.W  D2,D0            * remember position of first free entry
        BRA.S   L035AC           * next
+
 L0359E MOVEA.L D3,A1
-       CMP.B   $0014(A1),D1     * drive# =?
+       CMP.B   $0014(A1),D1     * is this the physical definition block for the drive number?
        BNE.S   L035AC
-       CMPA.L  $0010(A1),A2     * this driver ?
+       CMPA.L  $0010(A1),A2     * is it for the same device?
        BEQ.S   L035DC
 L035AC DBF     D2,L03596
-
-       MOVE.W  D0,D2            * found free pointer ?
+       MOVE.W  D0,D2            * physical def block not found, do we have a free entry?
        BLT     L0366C
        MOVEM.L D1-D2/A0/A2,-(A7)    * alloc new drive def block
        MOVE.L  $0020(A2),D1
-       JSR     L02FAE(PC)   * MM.ALCHP
+       JSR     L02FAE(PC)       * MM.ALCHP    Allocate physical def block for the drive
        MOVEM.L (A7)+,D1-D2/A1-A2
        EXG     A1,A0
        BNE     L0366E
-       MOVE.L  A2,$0010(A1)     * driver
-       MOVE.B  D1,$0014(A1)     * drive#
+       MOVE.L  A2,$0010(A1)     * pointer to access layer
+       MOVE.B  D1,$0014(A1)     * drive number
        MOVE.W  D2,D0
        LSL.W   #2,D0
        ADDA.W  D0,A4
-       MOVE.L  A1,(A4)          * set SV.FSDEF table entry
-
-L035DC MOVE.B  D2,$0005(A0)     * chdef+$18+$5
-       MOVE.B  $000B(A7),$0004(A0)  * delete(-1) or D3 code
-       LEA     $001A(A0),A4     * +$18, save name in channel defblock
+       MOVE.L  A1,(A4)              * store pointer to new physical def block in table
+L035DC MOVE.B  D2,$0005(A0)         * drive ID
+       MOVE.B  $000B(A7),$0004(A0)  * access mode
+       LEA     $001A(A0),A4         * file name area inside channel definition block
        MOVE.W  (A5)+,D0
        MOVE.W  $0024(A2),D3
        ADDQ.W  #2,D3            * drv namelen
@@ -5082,33 +5087,32 @@ L035DC MOVE.B  D2,$0005(A0)     * chdef+$18+$5
        MOVE.W  D0,(A4)+
        BRA.S   L03604
 
-L03602 MOVE.B  (A5)+,(A4)+      * copy name
+L03602 MOVE.B  (A5)+,(A4)+          * copy file name
 L03604 DBF     D0,L03602
-       MOVEA.L A1,A5
-       MOVEA.L A0,A1
-L0360C MOVEA.L (A1),A1          * next linked  channel
+       MOVEA.L A1,A5                * Physical definition block
+       MOVEA.L A0,A1                * Channel definition block + $18
+L0360C MOVEA.L (A1),A1              * Link to next file system channel
        MOVE.L  A1,D0
-       BEQ.S   L03652           * no more ..., find file
-       CMP.B   $0005(A1),D2     * same drive?
+       BEQ.S   L03652
+       CMP.B   $0005(A1),D2         * Channel for same drive?
        BNE.S   L0360C
-       MOVEQ   #$01,D0          * compare file names
-       MOVEA.W #$001A,A6            * name offset
+       MOVEQ   #$01,D0              * Compare file name, ignoring case
+       MOVEA.W #$001A,A6
        JSR     L03A9C(PC)           * UT.CSTR
        MOVEA.L $0024(A7),A6         * restore
        BNE.S   L0360C               * not same file
-
-       CMPI.B  #$02,$0004(A0)
-       BEQ.S   L03664               * already exists
-       CMPI.B  #$01,$0004(A0)
-       BNE.S   L03668               * in use
-       CMPI.B  #$01,$0004(A1)
-       BNE.S   L03668
-       MOVE.W  $0006(A1),$0006(A0)  * read only, copy info
-       MOVE.L  $000C(A1),$000C(A0)
-       MOVE.W  #$0040,$000A(A0)
-L03652 MOVEA.L A5,A1                * drive def
-       TST.W   $0006(A0)            * file already located ?
-       BEQ.S   L03690               * -> no, find it
+       CMPI.B  #$02,$0004(A0)       * Both channels are for same file. Is current open for 'new exclusive file'?
+       BEQ.S   L03664               * If 'new exclusive file', but already open, return 'Already Exists'
+       CMPI.B  #$01,$0004(A0)       * Is current open for 'old shared file'?
+       BNE.S   L03668               * If not opening 'old shared file', return 'In Use'
+       CMPI.B  #$01,$0004(A1)       * Was previous open also for 'old shared file'?
+       BNE.S   L03668               * If previous open didnt allow sharing, return 'In Use'
+       MOVE.W  $0006(A1),$0006(A0)  * Copy file number from previous channel
+       MOVE.L  $000C(A1),$000C(A0)  * Copy EOF position from previous channel
+       MOVE.W  #$0040,$000A(A0)     * File position pointer
+L03652 MOVEA.L A5,A1                * Physical definition block
+       TST.W   $0006(A0)            * Is this file 0? (directory)
+       BEQ.S   L03690
        SUBA.W  #$0018,A0
        BRA.S   L03684               * ok, return
 
@@ -5130,14 +5134,14 @@ L0366E LEA     $0140(A6),A1  * SV.FSLST
        MOVE.L  D4,D0
        BRA.S   L0368A
 
-L03684 ADDQ.B  #1,$0022(A1)
+L03684 ADDQ.B  #1,$0022(A1)  * Increment number of files open (inside physical definition block)
        MOVEQ   #$00,D0
 L0368A MOVEM.L (A7)+,D1-D6/A3-A6
        RTS
        
-
+* LOOK FOR MDV_DIRECTORY
 *#: call ddev_open
-L03690 SUBA.W  #$0018,A0            *
+L03690 SUBA.W  #$0018,A0
        MOVE.L  A1,-(A7)
        MOVE.L  A2,-(A7)
        LEA     -$0018(A2),A3
@@ -5163,7 +5167,6 @@ L036B6 MOVEM.L D3-D7/A1-A5,-(A7)
        JSR     (A4)                 * dev_format
 L036CC MOVEM.L (A7)+,D3-D7/A1-A5
        BRA     L003A6
-
 
 * VERIFY NAME
 *#: find drive a1=file_name< >a2 driver > d1=drive#num
@@ -5201,7 +5204,7 @@ L03718 MOVEQ   #-$07,D0
 L0371A MOVEM.L (A7)+,A1/A4
        RTS
 
-
+* ALIGN ADRESS
 *#: a2= (a2+1)& (not 1)
 L03720 MOVE.L  A2,D2
        ADDQ.L  #1,D2
@@ -5310,6 +5313,7 @@ L037D8 TST.L   (A2)
 L037F0 MOVEQ   #-$0F,D0
        RTS
 
+* install file and place extensions
 
 L037F4 LEA     $10(A2,D1.W),A3  * IO.QSET
        CLR.L   (A2)+
@@ -5404,13 +5408,13 @@ L0388C ADDI.L  #$0000000C,(A7)   * IO.SERIO - d0 as trap 3
        CMPI.W  #$0045,D0
        BHI.S   L038B2
        CMPI.W  #$0007,D0
-       BHI.S   L03914
+       BHI.S   L03914            * bad parameter
        ANDI.L  #$0000FFFF,D4
        MOVE.B  L038C0(PC,D0.W),D0
        JMP     L038C0(PC,D0.W)
        
 L038B2 CMPI.B  #$49,D0
-       BHI.S   L03914
+       BHI.S   L03914            * bad parameter
        MOVE.B  L038C0-$3E(PC,D0.W),D0
        JMP     L038C0(PC,D0.W)
 
@@ -5427,10 +5431,10 @@ L038C0 DC.B    XL0390A-L038C0
        DC.B    XL038F8-L038C0
        DC.B    XL038E4-L038C0
        
-L038CC MOVE.L  -$0008(A4),A4
+L038CC MOVE.L  -$0008(A4),A4     * D0=2 fetch LF-terminated line
 XL038CC EQU L038CC
 L038D0 CMP.L   D5,D4
-       BLS.S   L03918
+       BLS.S   L03918            * buffer full
        BSR.S   L03922
        BNE.S   L0391E
        MOVE.B  D1,(A1)+
@@ -5450,12 +5454,12 @@ L038E8 CMP.L   D5,D4
        BRA.S   L038E8
 
 XL038E4 EQU L038E4
-
-L038F8 MOVEA.L -$0008(A4),A4
+                                 * D0=3 fetch string of bytes
+L038F8 MOVEA.L -$0008(A4),A4     * fetch byte routine
 XL038F8 EQU L038F8
-L038FC CMP.L   D5,D4
-       BLS.S   L0391C
-       BSR.S   L03922
+L038FC CMP.L   D5,D4             * all bytes requested already read?
+       BLS.S   L0391C            * yes: return (no error)
+       BSR.S   L03922            * fetch byte
        BNE.S   L0391E
        MOVE.B  D1,(A1)+
        ADDQ.L  #1,D5
@@ -6446,15 +6450,15 @@ L0417E MOVEQ   #$00,D0
 
        include flp1_charfount_asm
 
-L0B352 ANDI.W #$0007,D2
-       ANDI.W #$003F,D1
-       CMPI.B #$36,D1
+L0B352 ANDI.W #$0007,D2     * key code -> ASCII conversion
+       ANDI.W #$003F,D1     * D2=shift/ctl/alt   D1=key code
+       CMPI.B #$36,D1       * space?
        BNE.S  L0B368
-       BTST   #$01,D2
+       BTST   #$01,D2       * control key?
        BEQ.S  L0B368
-       RTS
+       RTS                  * process ctrl-space
       
-L0B368 movem.l D3/D4/D5/A3,-(A7)
+L0B368 MOVEM.L  D3/D4/D5/A3,-(A7)    * key code -> ASCII conversion
        LEA      L0B458,A3            * keyboard - table
        MOVE.W   $8(A3),D4
        LEA.L    $0(A3,D4.W),A3
@@ -6467,73 +6471,73 @@ L0B37C CMP.B    (A3)+,D1
       
 L0B388 MOVE.B   (A3),D1
        OR.B     D2,D1
-       JMP      L0B450
+       JMP      L0B450      * process character
       
 L0B392 CLR.W    D5
-      BCLR     #$0,D2
+      BCLR     #$0,D2       * ALT key?
       BEQ.S    L0B39E
       MOVE.B   #-1,D5
-L0B39E LEA      L0B458,A3
-      MOVE.W   $0(A3,D2.W),D3
+L0B39E LEA      L0B458,A3   * keyboard - table
+      MOVE.W   $0(A3,D2.W),D3   * key/key+control/key+shift/key+shift+control sub tables
       LEA.L    $0(A3,D3.W),A3
       CLR.L    D3
-      MOVE.B   (A3)+,D3
+      MOVE.B   (A3)+,D3   * lowest key code allowed
       CMP.B    D3,D1
       BGE.S    L0B3BA
-      JMP      L0B446     * !!! PC-RELATIV POSSIBLE !!!
+      JMP      L0B446     * unimplemented char (!!! PC-RELATIVE POSSIBLE !!!)
       
-L0B3BA CMP.B   (A3)+,D1
+L0B3BA CMP.B   (A3)+,D1   * compare with highest allowed key code
        BLE.S    L0B3C4
-       JMP      L0B446
+       JMP      L0B446    * unimplemented char
 L0B3C4 SUBA.W  D3,A3
        MOVE.B  $0(A3,D1.W),D3
-       CMPI.B  #-1,D3
+       CMPI.B  #-1,D3     * special char modifier key (accent...)?
        BNE.S   L0B3D8   
-       ADD.B    D2,D1
-       MOVE.B   D1,$145(A6)
-       BRA.S    L0B446
+       ADD.B    D2,D1     * add modifiers
+       MOVE.B   D1,$145(A6) * save
+       BRA.S    L0B446    * unimplemented char
       
 L0B3D8 MOVE.B    D3,D1
-       MOVE.B     $145(A6),D2
-       BEQ.S      L0B414
+       MOVE.B     $145(A6),D2  * was special char modifier key pressed (accent...)?
+       BEQ.S      L0B414       * no: normal character
        CLR.B      $145(A6)
-       LEA        L0B458,A3    * !!! PC-RELATIV POSSIBLE !!!
+       LEA        L0B458,A3    * keyboard - table (!!! PC-RELATIVE POSSIBLE !!!)
        MOVE.W   $A(A3),D4
-       LEA      $0(A3,D4.W),A3
-L0B3F2 TST.B   (A3)
-       BEQ.S   L0B446
-       CMP.B   (A3)+,D2
-       BEQ.S   L0B404
-       MOVE.B   (A3)+,D4
+       LEA      $0(A3,D4.W),A3 * special modified key sub table (accent...)
+L0B3F2 TST.B   (A3)       * is the table present?
+       BEQ.S   L0B446     * if not: unimplemented char
+       CMP.B   (A3)+,D2   * is this the modifier key that was used?
+       BEQ.S   L0B404     * yes: go to table look-up
+       MOVE.B   (A3)+,D4  * no: 
        ASL.B   #1,D4
        EXT.W   D4
        ADDA.W   D4,A3
        BRA.S   L0B3F2
       
 L0B404 MOVE.B   (A3)+,D4
-L0B406 BEQ.S   L0B446
-      CMP.B   (A3)+,D3
+L0B406 BEQ.S   L0B446     * unimplemented char
+      CMP.B   (A3)+,D3    * look for character
       BEQ.S   L0B412
       ADDQ.L   #1,A3
       SUBQ.B   #1,D4
       BRA.S   L0B406
       
-L0B412 MOVE.B   (A3),D1
-L0B414 TST.B   $88(A6)    * SV.CAPS
-      BEQ.S   L0B43C
-      CMPI.B   #$61,D1
+L0B412 MOVE.B   (A3),D1   * load modified character
+L0B414 TST.B   $88(A6)    * SV.CAPS: caps lock is down?
+      BEQ.S   L0B43C      * if not proceed normally
+      CMPI.B   #$61,D1    * if character is lowercase letter then transform upper case */
       BCS.S   L0B43C
       CMPI.B   #$7A,D1
       BLS.S   L0B438
-      CMPI.B   #$80,D1
+      CMPI.B   #$80,D1    * do the same for some accented characters
       BCS.S   L0B43C
       CMPI.B   #$8B,D1
       BHI.S   L0B43C
       BSET   #$5,D1
       BRA.S   L0B43C
       
-L0B438 BCLR   #$5,D1
-L0B43C TST.B   D5
+L0B438 BCLR   #$5,D1     * transform in upper case character
+L0B43C TST.B   D5        * alt key?
       BEQ.S   L0B450
       LSL.W   #8,D1
       MOVE.B   D5,D1
@@ -6551,7 +6555,7 @@ oB456 RTS
       include flp1_Keyboard_asm
 
 
-L0B56C MOVEM.L   D1/D2/D3/A1,-(A7)
+L0B56C MOVEM.L   D1/D2/D3/A1,-(A7)   * send character to ser, with TRA-table translation
        MOVEQ    #$0,D0
        MOVE.L   $146(A6),A1
        MOVE.W   $2(A1),D2
@@ -6564,10 +6568,10 @@ L0B56C MOVEM.L   D1/D2/D3/A1,-(A7)
        MOVE.B   D0,D1
        BRA.S    L0B5D6
 L0B58E MOVE.L   D1,D3
-       JSR      L0380A
-       NOP                * !!! to coform asm !!!
+       JSR      L0380A    * IO.QTEST
+       NOP                * !!! to conform asm !!!
        MOVE.L   D3,D1
-       CMPI.W   #$FFF6,D0
+       CMPI.W   #$FFF6,D0 * end of file ?
        BEQ.S    L0B5DC
        MOVEQ    #$0,D0
        CMPI.W   #$3,D2
@@ -6585,18 +6589,18 @@ L0B5B8 BEQ.S    L0B5DC
        SUBQ.B   #1,D3
        BRA.S    L0B5B8
 L0B5C4 MOVE.B   (A1)+,D1
-       JSR      L03838
+       JSR      L03838    * IO.QIN
        NOP                * !!! to conform asm !!!
        MOVE.B   (A1)+,D1
-       JSR      L03838
+       JSR      L03838    * IO.QIN
        NOP                * !!! to conform asm !!!
        MOVE.B   (A1),D1
-L0B5D6 JSR      L03838
+L0B5D6 JSR      L03838    * IO.QIN
        NOP                * !!! to conform asm !!!
 L0B5DC MOVEM.L (A7)+,D1/D2/D3/A1
        RTS
 
-L0B5E2 MOVEM.L   D0/D1/D2/A1,-(A7)
+L0B5E2 MOVEM.L   D0/D1/D2/A1,-(A7)     * input ser TRA-table translation
        MOVE.L   $146(A6),A1
        MOVE.W   $2(A1),D2
        LEA      $0(A1,D2.W),A1
@@ -6622,16 +6626,16 @@ L0B60E MOVEM.L (A7)+,D0/D1/D2/A1
         
         ORG $BFE2
 
-L0BFE2 DC.L L0B614
-L0BFE6 DC.L L0B71C
-L0BFEA DC.L L0B5E2
-L0BFEE DC.L L0B56C
-L0BFF2 DC.L L0B352
+L0BFE2 DC.L L0B614      * address of standard TRA table
+L0BFE6 DC.L L0B71C      * address of standard error messages table
+L0BFEA DC.L L0B5E2      * serial input TRA-table translation
+L0BFEE DC.L L0B56C      * serial output TRA-table translation
+L0BFF2 DC.L L0B352      * key code -> ASCII conversion
 
 * nr of version
 
-L0BBF6  DC.L $312D3130
-L0BBFA  DC.W     $02
+L0BBF6  DC.L $312D3130  * QDOS version: '1.10'
+L0BBFA  DC.W     $02    * VER$ string:  "JS"
         DC.B    'JS'
         DC.W     $00
 

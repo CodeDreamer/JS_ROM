@@ -673,7 +673,7 @@ L0485C CMPI.W  #$20,D0
        BSR.S   L048C2
        MOVE.W  $00(A6,A1.L),D0
        ADD.L   $02(A6,A1.L),D1
-L04870 BVS.S   L04898                   *
+L04870 BVS.S   L04898
        BEQ.S   L048AA
        MOVE.L  D1,D3
        ADD.L   D3,D3
@@ -805,14 +805,14 @@ L0497A MOVEQ   #-$12,D0
 L0497E MOVE.L  D4,-(A7)
        MOVE.L  D5,-(A7)
        SF      D5
-       MOVE.L  $02(A6,A1.L),D2      * mantisa1
+       MOVE.L  $02(A6,A1.L),D2      * mantissa1
        BGT.S   L04994
        BEQ.S   L04A00
        JSR     L04A0C(PC)
        MOVE.L  D1,D2
        ST      D5
 L04994 ADDQ.W  #6,A1
-       MOVE.L  $02(A6,A1.L),D1      * mantisa2
+       MOVE.L  $02(A6,A1.L),D1      * mantissa2
        BGT.S   L049A4
        BEQ.S   L049F6
        JSR     L04A0C(PC)

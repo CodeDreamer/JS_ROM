@@ -45,7 +45,7 @@ L05060 MOVE.W  #$AA55,(A0)+
        DBF     D1,L05060
        MOVE.W  #$0F0E,$021A(A5)
        MOVE.W  D7,D1
-       LEA     $00018020,A3   * A3 status of 8049
+       LEA     $00018020,A3   * A3 status of ZX8302
        MOVEQ   #$10,D0
        JSR     L00420
        NOP                    * !!! to conform asm leave it !!!
@@ -245,6 +245,9 @@ XL0123A EQU L0523A-$4000
        ADDQ.L  #2,(A7)
 L0525A RTS
 
+*===========
+* MD.READ
+*===========
 L0525C 
 XL0125C EQU L0525C-$4000
        LEA     L052CE(PC),A0   * read sector (addr. in a0)
@@ -253,22 +256,22 @@ XL0125C EQU L0525C-$4000
 L05262 
 XL01262 EQU L05262-$4000
        LEA     L05354(PC),A0   * verify sector addr. in a0
-L05266 JSR     L05448(PC)      * do it
+L05266 JSR     L05448(PC)      * wait for end of gap
        RTS                     * failed
        MOVE.L  A1,-(A7)
        CLR.W   -(A7)
        MOVEA.L A7,A1
        MOVEQ   #$01,D1
-       BSR.S   L052CE   * read header
+       BSR.S   L052CE   * read block header
        BRA.S   L05296   * failed
        MOVE.B  #$02,D1  * ok
-       MOVE.B  D1,(A3)  * set timing (8049)
+       MOVE.B  D1,(A3)  * read mode
        MOVEQ   #$08,D0  * wait a little
 L05280 DBF     D0,L05280
-       MOVE.B  D1,(A3)  * again timing
+       MOVE.B  D1,(A3)  * again read mode
        MOVE.W  #$01FF,D1
        MOVEA.L $0002(A7),A1 * a1= buffer address
-       JSR     (A0)   * do it
+       JSR     (A0)     * do it (read sector data)
        BRA.S   L05296   * error
        ADDQ.L  #2,$0006(A7)
 L05296 MOVEQ   #$00,D1
@@ -294,11 +297,11 @@ L052B8 MOVE.W  #$0100,D0   * initialise parameters
        LEA     $0003(A3),A4   * to read track 2
        RTS
 
-L052CE BSR     L052B8   * read number of bits - initialise
+L052CE BSR     L052B8     * read number of bits - initialise
 L052D0 BTST    D6,(A3)
-       DBNE    D0,L052D0  * till buffer is empty
+       DBNE    D0,L052D0  * wait until buffer is full
        EXG      A4,A4     * !!! WHAT'S THAT ??? !!!
-       MOVE.B   (A2),D4
+       MOVE.B   (A2),D4   * read track 1
        EXG      A4,A2     * !!! REALLY NECESSARY ?? !!!
        MOVE.B   D4,(A1)+
        ADD.W    D4,D3
@@ -347,15 +350,15 @@ L052EE BTST     D6,(A3)   * then omit the following code)!!!
 o05336 MOVEQ   #-1,D0
 L05338 NOP
        NOP              * including this line but: - reset label!
-       MOVE.B  (A2),D4
-       EXG     A4,A2
+       MOVE.B  (A2),D4  * read track
+       EXG     A4,A2    * switch to other track
        MOVE.B  D4,(A1)+
        ADD.W   D4,D3
        TST.W   D0
        BLT     L05446
        MOVEQ   #$14,D0
        SUBQ.W  #1,D1
-       BGE.S   L052EA   * try evtl second track
+       BGE.S   L052EA   * loop, next byte
        BRA     L053DE
 
 L05354 BSR     L052B8   * verify reading - initialise
@@ -478,23 +481,23 @@ L05430 MOVE.B  (A2),D4
        ADDQ.L  #2,(A7)
 L05446 RTS
 
-L05448 MOVEQ   #$00,D1   * wait for pulsing interrupts
+L05448 MOVEQ   #$00,D1   * wait for end of gap
 L0544A SUBQ.W  #1,D1     * 0.38 seconds
        BEQ.S   L05476
-       BTST    #$03,(A3) * from 8049
+       BTST    #$03,(A3) * gap?
        BEQ.S   L0544A
        MOVEQ   #$00,D1
 L05456 SUBQ.W  #1,D1     * wait again 0.38 sec
        BEQ.S   L05476
        MOVEQ   #$17,D0
-L0545C BTST    #$03,(A3)
+L0545C BTST    #$03,(A3) * still in gap?
        BNE.S   L05456
        DBF     D0,L0545C
        MOVE.B  #$02,D1
-       MOVE.B  D1,(A3)
+       MOVE.B  D1,(A3)   * set read mode
        MOVEQ   #$08,D0
 L0546E DBF     D0,L0546E
-       MOVE.B  D1,(A3)
+       MOVE.B  D1,(A3)   * set read mode again
        ADDQ.L  #2,(A7)
 L05476 RTS
 

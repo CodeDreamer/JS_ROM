@@ -537,7 +537,7 @@ L05B42 BSR     L05AA0
        ADDQ.W  #2,A0
        BRA.S   L05B38
 
-* table of priorities of artihmetic operations
+* table of priorities of arithmetic operations
 
 L05B56 DC.L    $00050506
        DC.L    $06040404
@@ -1002,7 +1002,7 @@ L05F6C MOVEQ   #$06,D1
 L05F80 MOVEQ   #$00,D1
        MOVE.W  $00(A6,A4.L),D1
        ADDQ.W  #2,A4
-L05F88 MOVE.L  D1,-(A7)
+L05F88 MOVE.L  D1,-(A7)       * convert name (D1=len, A4=ptr) to string and push to arithmetic stack
        ADDQ.L  #3,D1
        BSR.S   L05FBC
        MOVE.L  (A7),D1
@@ -1539,7 +1539,7 @@ L064A2 MOVE.L  A4,-(A7)
        MOVEQ   #$0F,D0
        AND.B   -$07(A6,A5.L),D0
        SUBQ.B  #1,D0
-       BEQ.S   L064D6
+       BEQ.S   L064D6         * already a string
        MOVEQ   #$00,D0
        MOVE.W  -$06(A6,A5.L),D0
        BLT.S   L064DC
@@ -2508,29 +2508,29 @@ L06D8E MOVE.L  $00(A6,A1.L),$04(A6,A2.L)
        RTS
 
 L06DA2 LEA     L06E22(PC),A1
-L06DA6 MOVEM.L D1-D2/D5-D7/A0/A2-A3,-(A7)
+L06DA6 MOVEM.L D1-D2/D5-D7/A0/A2-A3,-(A7)  * BP.INIT $110
        MOVEQ   #$08,D6
 L06DAC MOVEQ   #$00,D7
        MOVEQ   #$00,D5
-       MOVE.W  (A1)+,D5
+       MOVE.W  (A1)+,D5                 * number of procedures/functions
        LSL.L   #3,D5
        MOVE.L  D5,D1
        MOVE.L  A1,-(A7)
-       JSR     L04E60(PC)
+       JSR     L04E60(PC)               * reserve D1 bytes in name table
        MOVE.L  D5,D1
-       JSR     L04E72(PC)
+       JSR     L04E72(PC)               * reserve D1 bytes in name list
        MOVEA.L (A7)+,A3
 L06DC4 MOVEA.L A3,A1
-       MOVE.W  (A3)+,D0
+       MOVE.W  (A3)+,D0                 * end of procedures/functions marker?
        BEQ.S   L06E0C
-       ADDA.W  D0,A1
+       ADDA.W  D0,A1                    * pointer to routine
        MOVE.L  A1,-(A7)
-       MOVE.B  (A3)+,D5
+       MOVE.B  (A3)+,D5                 * name length
        MOVE.B  D5,-(A7)
        MOVE.B  D6,-(A7)
-       MOVE.B  D5,D1
-       MOVEA.L (A6),A1
-L06DD8 MOVE.B  (A3)+,$00(A6,A1.L)
+       MOVE.B  D5,D1                    * name length counter
+       MOVEA.L (A6),A1                  * buffer base
+L06DD8 MOVE.B  (A3)+,$00(A6,A1.L)       * copy name to buffer
        ADDQ.W  #1,A1
        SUBQ.B  #1,D1
        BGT.S   L06DD8
@@ -2539,16 +2539,16 @@ L06DD8 MOVE.B  (A3)+,$00(A6,A1.L)
        LEA     L08B5A(PC),A2
        MOVEA.L (A2),A2
        JSR     L08622(PC)
-       BRA.S   L06E16
-       MOVEA.L (A7)+,A3
+       BRA.S   L06E16                   * error return point
+       MOVEA.L (A7)+,A3                 * ok return point (A2 points to name table entry (rel A6))
        MOVE.B  (A7)+,D6
        MOVE.B  (A7)+,D5
-       MOVE.L  (A7)+,$04(A6,A2.L)
-       MOVE.B  D6,$00(A6,A2.L)
-       MOVE.B  D7,$01(A6,A2.L)
+       MOVE.L  (A7)+,$04(A6,A2.L)       * address of function
+       MOVE.B  D6,$00(A6,A2.L)          * 8 for procedures; 9 for functions
+       MOVE.B  D7,$01(A6,A2.L)          * D7=0
        BTST    D7,D5
        BNE.S   L06DC4
-       ADDQ.W  #1,A3
+       ADDQ.W  #1,A3                    * increment pointer if address is odd
        BRA.S   L06DC4
 
 L06E0C SUBQ.W  #8,D6
@@ -2557,8 +2557,8 @@ L06E0C SUBQ.W  #8,D6
        MOVEA.L A3,A1
        BRA.S   L06DAC
 
-L06E16 ADDA.W  #$000C,A7
-       MOVEQ   #-$0C,D0
+L06E16 ADDA.W  #$000C,A7                * clear stack
+       MOVEQ   #-$0C,D0                 * bad name
 L06E1C MOVEM.L (A7)+,D1-D2/D5-D7/A0/A2-A3
        RTS
 

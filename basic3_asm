@@ -1898,11 +1898,11 @@ L084CA MOVEQ   #$01,D3
 
 L084CE MOVEQ   #$00,D3
 L084D0 MOVEA.L A0,A3
-       JSR     L08706(PC)
-       BRA.S   L084F8
+       JSR     L08706(PC) * find end of identifier
+       BRA.S   L084F8     * ERROR
 
-L084D8 MOVE.L  A0,D5
-       SUB.L   A3,D5
+L084D8 MOVE.L  A0,D5	  * OK
+       SUB.L   A3,D5      * length (>= 1)
        CMPI.W  #$00FF,D5
        BGT.S   L084F8
        MOVE.L  A0,-(A7)
@@ -2136,13 +2136,13 @@ L08728 ADDQ.L  #2,(A7)
 L0872A RTS
 
 L0872C MOVEQ   #$00,D1
-       MOVE.B  $00(A6,A0.L),D1
+       MOVE.B  $00(A6,A0.L),D1     * read next character
        BLT.S   L08746
        LEA     L03C28(PC),A1
        MOVE.B  $00(A1,D1.W),D2
-       CMPI.B  #$01,D2
+       CMPI.B  #$01,D2             * alphabetic?
        BEQ.S   L08746
-       CMPI.B  #$02,D2
+       CMPI.B  #$02,D2             * digit?
 L08746 RTS
 
 L08748 MOVE.L  A0,-(A7)
@@ -2190,7 +2190,7 @@ L08794 MOVEQ   #$00,D0
        BCLR    #$05,D0
 L087AC RTS
 
-* DISPLACEMENT - JUMPS RELATIV TO 87C4
+* DISPLACEMENT - JUMPS RELATIVE TO 87C4
 
 L087AE DC.W    L084CE-EDUMMY
        DC.W    L0860C-EDUMMY
@@ -5561,11 +5561,11 @@ sysnew
 L0AADC 
 XL0AADC EQU L0AADC
        
-       MOVEA.L $0034(A6),A3
-       MOVEA.L $0030(A6),A2
+       MOVEA.L $0034(A6),A3             * channel name table top
+       MOVEA.L $0030(A6),A2             * channel name table base
        ADDA.W  #$0078,A2
-       MOVE.L  A2,$0034(A6)
-L0AAEC CMPA.L  A3,A2
+       MOVE.L  A2,$0034(A6)             * only three channels
+L0AAEC CMPA.L  A3,A2                    * close channels >= #3
        BGE.S   L0AB02
        MOVE.L  $00(A6,A2.L),D0
        BLT.S   L0AAFC
@@ -5575,13 +5575,13 @@ L0AAEC CMPA.L  A3,A2
 L0AAFC ADDA.W  #$0028,A2
        BRA.S   L0AAEC
 
-L0AB02 MOVEQ   #$10,D0
+L0AB02 MOVEQ   #$10,D0                  * clear screen and all windows
        MOVEQ   #-$01,D1
        MOVEQ   #-$01,D2
        TRAP    #$01
        MOVEQ   #$10,D0
        TRAP    #$01
-       MOVE.L  $0040(A6),$0044(A6)
+       MOVE.L  $0040(A6),$0044(A6)      * empty line number table
        CLR.W   $009E(A6)
        BSR     L0AA88
        MOVE.L  $0010(A6),$0014(A6)

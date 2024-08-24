@@ -9,7 +9,7 @@ L0B458
 
   dc.l $000C008A,$004B00C9,$01080112
 
-* the first bytes are displacements for key, shift key, ctrl_key
+* the first bytes are displacements for key, shift key, ctrl key
 * ctrl-shift key, cursor, special keys
 * the first 4 sequences start each with $03,$3F
 * if you want to split: Take care for even adresses or use
@@ -51,6 +51,6 @@ L0B458
 * DC.L $69926F84
 * DC.L $758700FF
 
-* LAST BYTE ($FF) PROBABLY HAST OB CONVERT TO $00 !!!!
+* LAST BYTE ($FF) PROBABLY HAS TO BE CONVERTED TO $00 !!!!
 
 ****** End KEYBOARD_ASM keyboard_asm

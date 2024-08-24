@@ -8,56 +8,57 @@
 
 L029FC SF      $0023(A2)   * mdv: motor on
 L02A00 MOVEQ   #$00,D1
-       MOVE.B  $0014(A2),D1
+       MOVE.B  $0014(A2),D1     * drive number
        LEA     $00EE(A6),A3
-       ST      $09(A3,D1.W)
-       TST.B   (A3)
-       BNE.S   L02A38
+       ST      $09(A3,D1.W)     * set pending ops flag for microdrive
+       TST.B   (A3)             * is drive running
+       BNE.S   L02A38           * drive already running
        MOVEQ   #$10,D0
        JSR     L00420(PC)
        MOVE.B  D1,(A3)
-       MOVE.B  #$FA,$00EF(A6)
+       MOVE.B  #$FA,$00EF(A6)   * microdrive run-up run-down counter (= -6)
        LEA     $00018020,A3
        JSR     L02C56(PC)
        ORI.B   #$20,$0035(A6)
        MOVE.B  $0035(A6),$00018021
 L02A38 RTS
 
-L02A3A MOVE.W  $0008(A7),D0  * update server-block mdv
-       LSL.W   #2,D0
+L02A3A MOVE.W  $0008(A7),D0     * reset slave blocks info for a microdrive
+       LSL.W   #2,D0            * drive ID
        ADDQ.W  #1,D0
-       MOVEA.L $0058(A6),A1
+       MOVEA.L $0058(A6),A1     * base of slave block table
 L02A46 MOVEQ   #-$0F,D1
        AND.B   (A1),D1
-       CMP.B   D1,D0
+       CMP.B   D1,D0            * is this slave block entry for the same drive ID?
        BNE.S   L02A52
-       MOVE.B  #$01,(A1)
+       MOVE.B  #$01,(A1)        * if same drive ID, reset the slave block type to "empty block"
 L02A52 ADDQ.W  #8,A1
-       CMPA.L  $005C(A6),A1
+       CMPA.L  $005C(A6),A1     * top of slave block table
        BLT.S   L02A46
-       LEA     $0228(A5),A1
+       LEA     $0228(A5),A1     * clean sector->slave block table (512 bytes)
        MOVEQ   #$7F,D0
 L02A60 CLR.L   (A1)+
        DBF     D0,L02A60
        RTS
 
-L02A68 TST.B   $0023(A5) * Test sectortype
+* microdrive name/number doesn't match
+L02A68 TST.B   $0023(A5)    * Test sectortype
        BLE.S   L02A9C
-       TST.B   $0022(A5)
+       TST.B   $0022(A5)    * Any open files?
        BNE.S   L02A9C
-       TST.B   D7
+       TST.B   D7           * Sector 0?
        BNE.S   L02A98
        LEA     $0028(A5),A1
-       JSR     L0525C  * read sector 0
-       BRA.S   L02A98  * error
+       JSR     L0525C       * read sector 0
+       BRA.S   L02A98       * error
        LEA     $0008(A7),A1
        LEA     $0016(A5),A2
-       MOVE.L  (A1)+,(A2)+
+       MOVE.L  (A1)+,(A2)+  * copy medium name and random number to physical definition block
        MOVE.L  (A1)+,(A2)+
        MOVE.L  (A1)+,(A2)+
        BSR.S   L02A3A
 L02A94 SF      $0023(A5)
-L02A98 BRA     L02B84  * stop motor
+L02A98 BRA     L02B84       * stop motor and exit
 
 
 L02A9C LEA     $0016(A5),A1 * a1 = $16 of PDB
@@ -66,47 +67,47 @@ L02A9C LEA     $0016(A5),A1 * a1 = $16 of PDB
        SUBA.L  A0,A0
        MOVEQ   #$0A,D2
        JSR     L039B4(PC)   * append name
-       MOVEQ   #-$10,D0
+       MOVEQ   #-$10,D0     * bad medium
        JSR     L03968(PC)   * UT.ERR
-L02AB2 BSR.S   L02A3A       * update server block
+L02AB2 BSR.S   L02A3A       * clean up slave block info for a microdrive
        ST      $0023(A5)
        BRA     L02BE2
 
-L02ABC MOVEM.L D0-D6/A0-A4,-(A7)  * interrupt 2 of mdv
+L02ABC MOVEM.L D0-D6/A0-A4,-(A7)    * interrupt 2 of mdv (GAP interrupt)
        LEA     $00018020,A3
        MOVEQ   #$00,D0
-       MOVE.B  $00EE(A6),D0
+       MOVE.B  $00EE(A6),D0         * running microdrive number
        BEQ     L02B88
-       SUBA.W  #$000E,A7
+       SUBA.W  #$000E,A7            * allocate 14 bytes buffer for sector header
        MOVEA.L A7,A1
        LEA     $00F0(A6),A5
-       SF      $07(A5,D0.W)
-       MOVE.B  -$01(A5,D0.W),D0
+       SF      $07(A5,D0.W)         * clear pending ops flag for microdrive
+       MOVE.B  -$01(A5,D0.W),D0     * saved microdrive ID (= offset in physical definition pointers table)
        MOVE.W  D0,-(A7)
-       MOVEA.L $10(A5,D0.W),A5
+       MOVEA.L $10(A5,D0.W),A5      * physical definition block for drive
        MOVE.L  A5,-(A7)
-       MOVE.B  $00EF(A6),D2
+       MOVE.B  $00EF(A6),D2         * microdrive run-up run-down counter
        BGE.S   L02AF2
-       ADDQ.B  #1,D2
-L02AF2 JSR     L0523A   * read header
-L02AF8 BRA.S   L02A9C   * error
-       BRA.S   L02A98   * mistake
-       MOVEQ   #$0B,D0
-       LEA     $0022(A5),A2
+       ADDQ.B  #1,D2                * if still starting microdrive, increase the startup counter
+L02AF2 JSR     L0523A               * read header
+L02AF8 BRA.S   L02A9C               * error
+       BRA.S   L02A98               * mistake
+       MOVEQ   #$0B,D0              * OK
+       LEA     $0022(A5),A2         * compare name and random number (still the same microdrive?)
 L02B02 MOVE.B  -(A2),D1
        CMP.B   -(A1),D1
        BNE     L02A68
        DBF     D0,L02B02
        TST.B   $0023(A5)
        BGT.S   L02A94
-       ADD.W   D7,D7
-       BNE.S   L02B24
+       ADD.W   D7,D7                * sector number * 2 = sector offset in microdrive map
+       BNE.S   L02B24               * sector 0? 
        ADDQ.B  #1,$0024(A5)
        CMPI.B  #$08,$0024(A5)
-       BGT.S   L02AF8
+       BGT.S   L02AF8               * error after 8 full tape loops
 L02B24 ADDA.W  D7,A5
        MOVEQ   #$00,D1
-       MOVE.W  $0228(A5),D1
+       MOVE.W  $0228(A5),D1         * slave block number (??)
        BEQ     L02BC4
        TST.B   D2
        BLE.S   L02B36
@@ -115,25 +116,25 @@ L02B36 MOVE.B  D2,$00EF(A6)
        TST.W   D1
        BLT     L02C1C
        LSL.L   #3,D1
-       MOVEA.L $0058(A6),A4
-       ADDA.L  D1,A4
+       MOVEA.L $0058(A6),A4         * base of slave block table
+       ADDA.L  D1,A4                * pointer to slave block entry
        MOVE.L  A4,-(A7)
        LSL.L   #6,D1
        LEA     $00(A6,D1.L),A1
-       BTST    #$02,(A4)
+       BTST    #$02,(A4)            * is block awaiting write?
        BNE.S   L02BA6
-       BTST    #$01,(A4)
+       BTST    #$01,(A4)            * is block awaiting verify?
        BNE.S   L02B66
-       JSR     L0525C
-       BRA.S   L02B82
-       BRA.S   L02B6E
+       JSR     L0525C               * read sector
+       BRA.S   L02B82               * failed
+       BRA.S   L02B6E               * OK
 
 
-L02B66 JSR     L05262
-       BRA.S   L02B7E
+L02B66 JSR     L05262               * verify sector
+       BRA.S   L02B7E               * failed
 
 
-L02B6E MOVEQ   #$03,D0
+L02B6E MOVEQ   #$03,D0              * OK
        CLR.W   $0228(A5)
        MOVEA.L $0004(A7),A1
        SF      $0024(A1)
@@ -149,23 +150,23 @@ L02B88 MOVE.B  $0035(A6),D7
        ORI.B   #$01,D7
        ANDI.B  #$DF,D7
        MOVE.B  D7,$0001(A3)
-       MOVE.B  $0035(A6),$0001(A3)
+       MOVE.B  $0035(A6),$0001(A3)  * clear interrupts mask
        MOVEM.L (A7)+,D0-D6/A0-A4
        BRA     L003B6
 
 
 L02BA6 TST.B   D2       * rewrite-block
        BMI.S   L02B82
-       MOVE.W  $0028(A5),-(A7)
-       JSR     L051B0
+       MOVE.W  $0028(A5),-(A7)      * file number and block number (from in-memory microdrive map)
+       JSR     L051B0               * write sector
        ADDQ.W  #2,A7
        MOVEQ   #$0B,D0
 L02BB8 MOVEQ   #-$10,D1
-       MOVEA.L (A7)+,A4
+       MOVEA.L (A7)+,A4             * saved pointer to slave block entry
        AND.B   (A4),D1
        OR.B    D0,D1
-       MOVE.B  D1,(A4)
-       MOVEQ   #$05,D2
+       MOVE.B  D1,(A4)              * mark written slave block as awaiting verify
+       MOVEQ   #$05,D2              * reset run-up run-down counter to 6
 L02BC4 TST.B   D2
        BMI.S   L02C14
        ADDQ.B  #1,D2
@@ -198,24 +199,24 @@ L02C14 MOVE.B  D2,$00EF(A6)
 L02C18 BRA     L02B84
 
 
-L02C1C LEA     $0028(A5),A1  * do sectorjob -2 = verify -1 = read
+L02C1C LEA     $0028(A5),A1     * do sectorjob -2 = verify -1 = write
        ADDQ.W  #1,D1
        BNE.S   L02C3A
        TST.B   D2
-       BMI     L02B84
-       MOVE.W  #$8000,-(A7)
-       JSR     L051B0
+       BMI     L02B84           * if still starting microdrive motor, exit instead of writing sector
+       MOVE.W  #$8000,-(A7)     * block header (for empty block?)
+       JSR     L051B0           * write sector
        ADDQ.W  #2,A7
-       MOVEQ   #-$02,D1
+       MOVEQ   #-$02,D1         * mark slave block for verification
        BRA.S   L02C48
 
-L02C3A JSR     L05262  * verify sector
-       BRA.S   L02C46  * error
-       MOVEQ   #$00,D1
+L02C3A JSR     L05262           * verify sector
+       BRA.S   L02C46           * error
+       MOVEQ   #$00,D1          * verified OK
        BRA.S   L02C48
-L02C46 MOVEQ   #-$01,D1
+L02C46 MOVEQ   #-$01,D1         * verification error: mark slave block for trying to write sector again
 L02C48 MOVE.W  D1,$0228(A5)
-       BRA     L02B84   * 
+       BRA     L02B84
 
 
 L02C50 MOVEQ   #$02,D2  * stop mdv-motor

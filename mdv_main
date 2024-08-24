@@ -29,11 +29,11 @@ L0125E MOVEM.L (A7),D0/D2
        MOVEM.L (A7)+,D2/D4-D7/A4-A5
        RTS
 
-L01274 MOVEQ   #$00,D6    * select mdv-routine
-       MOVE.B  $001D(A0),D6
+L01274 MOVEQ   #$00,D6     		* select mdv-routine
+       MOVE.B  $001D(A0),D6  	* drive ID
        LSL.B   #2,D6
        LEA     $0100(A6),A2
-       MOVEA.L $00(A2,D6.W),A2
+       MOVEA.L $00(A2,D6.W),A2  * physical definition block pointer
        LSL.B   #2,D6
        CMPI.B  #$40,D0
        BCS     L0135E
@@ -467,17 +467,17 @@ L01656 ANDI.W  #$F8FF,SR
        ORI.W   #$0700,SR
 L0165E MOVEA.L (A7),A0
        LEA     $0078(A0),A1
-       JSR     L0523A
+       JSR     L0523A	        * Read sector header
        BRA.S   L016D6           * ERROR
        BRA.S   L01656           * ERROR
        MOVEM.L (A7),A0-A2/A4    * SUCCESS
        ADD.W   D7,D7
-       BEQ     L016FC
+       BEQ     L016FC      		* sector 0?
        MOVE.B  $28(A2,D7.W),D0
-       CMP.B   $001F(A0),D0
+       CMP.B   $001F(A0),D0    	* does file num match?
        BNE.S   L01656
        MOVEQ   #$00,D4
-       MOVE.B  $29(A2,D7.W),D4
+       MOVE.B  $29(A2,D7.W),D4	* file block number
        MOVE.L  D4,D7
        MOVEQ   #$07,D5
        AND.W   D4,D5
@@ -486,7 +486,7 @@ L0165E MOVEA.L (A7),A0
        BEQ.S   L01656
        MOVEA.W D4,A5
        MOVEA.L A4,A1
-       JSR     L0525C
+       JSR     L0525C           * Read sector
        BRA.S   L0165E           * ERROR
        MOVEM.L (A7),A0-A2/A4    * SUCCESS
        BCLR    D5,$58(A0,A5.W)
@@ -542,34 +542,34 @@ L01724 ORI.B   #$20,$0035(A6)
        ANDI.W  #$F8FF,SR
        RTS
 
-L01730 MOVEA.L A1,A2   * open mdv-channel
+L01730 MOVEA.L A1,A2        	* MDV OPEN: open mdv-channel
        MOVEQ   #$00,D1
-       MOVE.B  $0014(A2),D1
+       MOVE.B  $0014(A2),D1  	* drive number
        MOVEQ   #$00,D0
-       MOVE.B  $001D(A0),D0
+       MOVE.B  $001D(A0),D0  	* drive ID
        LSL.B   #2,D0
        LEA     $00EE(A6),A4
-       MOVE.B  D0,$01(A4,D1.W)
-       CMP.B   (A4),D1
+       MOVE.B  D0,$01(A4,D1.W)  * set microdrive ID at $F0 sys var area
+       CMP.B   (A4),D1         	* is the correct microdrive already running?
        BEQ.S   L01766
-       TST.B   $07(A4,D1.W)
-       BNE.S   L01766
+       TST.B   $07(A4,D1.W)   	* pending ops for running microdrive?
+       BNE.S   L01766         	* yes
        MOVE.B  #$01,$0023(A2)
-       JSR     L02A00(PC)
+       JSR     L02A00(PC)     	* start MDV motor
 L0175C TST.B   $0023(A2)
        BGT.S   L0175C
        BMI     L01844
 L01766 LEA     $0058(A0),A4
        MOVEQ   #$40,D2
-       MOVE.L  D2,$0024(A0)
+       MOVE.L  D2,$0024(A0)   	* EOF = 64 (empty file)
        MOVEQ   #-$01,D3
-       BSR     L0184C
-       MOVE.L  (A4),D4
+       BSR     L0184C         	* read 64 bytes to buffer A4
+       MOVE.L  (A4),D4         	* file length
        MOVE.L  D4,D0
        LSL.L   #7,D0
        LSR.W   #7,D0
-       MOVE.L  D0,$0024(A0)
-       CMPI.B  #$04,$001C(A0)
+       MOVE.L  D0,$0024(A0)	 	* EOF block number and offset
+       CMPI.B  #$04,$001C(A0)   * directory?
        BEQ     L01840
        LSR.L   #6,D4
        MOVEQ   #$00,D5
@@ -635,11 +635,11 @@ L01810 MOVE.L  D2,(A4)
        BSR.S   L01850
        BRA.S   L01840
 
-L01822 MOVE.B  $001C(A0),D0
+L01822 MOVE.B  $001C(A0),D0  	* access mode
        BLT.S   L0185E
        CMPI.B  #$02,D0
        BGE.S   L01848
-       MOVE.L  (A4),D0
+       MOVE.L  (A4),D0			* open old (shared) file
        LSL.L   #7,D0
        LSR.W   #7,D0
        MOVE.L  D0,$0024(A0)
@@ -648,47 +648,47 @@ L01822 MOVE.B  $001C(A0),D0
 L01840 MOVEQ   #$00,D0
        BRA.S   L0184A
 
-L01844 MOVEQ   #-$07,D0
+L01844 MOVEQ   #-$07,D0  	* not found
        BRA.S   L0184A
 
-L01848 MOVEQ   #-$08,D0
+L01848 MOVEQ   #-$08,D0  	* already exists
 L0184A RTS
 
-L0184C MOVEQ   #$03,D0
+L0184C MOVEQ   #$03,D0     	* 3 = fetch string
        BRA.S   L01852
 
-L01850 MOVEQ   #$07,D0
+L01850 MOVEQ   #$07,D0		* 7 = send string
 L01852 MOVEA.L A4,A1
        JSR     L0125A(PC)
        BEQ.S   L0184A
        ADDQ.W  #4,A7
        RTS
 
-L0185E MOVEQ   #-$40,D1
+L0185E MOVEQ   #-$40,D1      	* delete file
        JSR     L0192C(PC)
        CLR.L   (A4)
        CLR.W   $000E(A4)
        BSR.S   L01850
-       MOVE.W  #$01FE,D0
-       LEA     $28(A2,D0.W),A4
-L01874 CMP.B   (A4),D5
+       MOVE.W  #$01FE,D0      	* look at MDV map
+       LEA     $28(A2,D0.W),A4 	* map starts at offset $28 of physical def block
+L01874 CMP.B   (A4),D5         	* same file number?
        BNE.S   L01880
-       MOVE.W  #$FD00,(A4)
+       MOVE.W  #$FD00,(A4)   	* mark sector as free
        CLR.W   $0200(A4)
 L01880 SUBQ.W  #2,A4
        SUBQ.W  #2,D0
        BNE.S   L01874
-       MOVE.B  $001D(A0),D1
+       MOVE.B  $001D(A0),D1   	* drive ID
        LSL.B   #4,D1
        ADDQ.W  #1,D1
-       MOVEA.L $0058(A6),A4
+       MOVEA.L $0058(A6),A4   	* base of slave block table
 L01892 MOVEQ   #-$0F,D0
-       AND.B   (A4),D0
+       AND.B   (A4),D0		   	* slave block for same drive?
        CMP.B   D0,D1
        BNE.S   L018A4
-       CMP.W   $0004(A4),D5
+       CMP.W   $0004(A4),D5    	* slave block for same file number?
        BNE.S   L018A4
-       MOVE.B  #$01,(A4)
+       MOVE.B  #$01,(A4)        * mark slave block as free
 L018A4 ADDQ.W  #8,A4
        CMPA.L  $005C(A6),A4
        BLT.S   L01892
@@ -696,39 +696,40 @@ L018A4 ADDQ.W  #8,A4
        JSR     L029FC(PC)
        BRA.S   L01840
 
-L018B8 TST.B   $002C(A0)   * close mdv-channel
+* CLOSE MDV: close mdv-channel
+L018B8 TST.B   $002C(A0)      	* Has file length changed?
        BEQ.S   L018F0
-       MOVE.L  $0024(A0),D0
+       MOVE.L  $0024(A0),D0    	* EOF block and offset
        LSL.W   #7,D0
-       LSR.L   #7,D0
+       LSR.L   #7,D0			* File len
        LEA     $0058(A0),A1
        MOVE.L  D0,(A1)
        CLR.L   $0020(A0)
-       BSR.S   L0191A
+       BSR.S   L0191A     		* Write file length to first 4 bytes of file
        MOVEQ   #$00,D0
-       MOVE.W  $001E(A0),D0
+       MOVE.W  $001E(A0),D0		* File number
        LSL.L   #6,D0
        LSL.L   #7,D0
        LSR.W   #7,D0
        MOVE.L  D0,$0020(A0)
        CLR.W   $001E(A0)
        ST      $0025(A0)
-       BSR.S   L0191A
+       BSR.S   L0191A			* Write file lenght to copy of file header in microdrive directory
        JSR     L029FC(PC)
 L018F0 MOVEQ   #$00,D0
-       MOVE.B  $001D(A0),D0
+       MOVE.B  $001D(A0),D0		* drive ID
        LSL.B   #2,D0
        LEA     $0100(A6),A2
-       MOVEA.L $00(A2,D0.W),A2
-       SUBQ.B  #1,$0022(A2)
+       MOVEA.L $00(A2,D0.W),A2	* Physical definition block
+       SUBQ.B  #1,$0022(A2)		* decrement number of open files
        LEA     $0140(A6),A1
        LEA     $0018(A0),A0
-       JSR     L039E2(PC)    * UT.UNLNK
+       JSR     L039E2(PC)    	* UT.UNLNK
        LEA     -$0018(A0),A0
-       JSR     L0305E(PC)    * MT.RECHP
+       JSR     L0305E(PC)    	* MT.RECHP
        RTS
 
-L0191A MOVEQ   #$07,D0
+L0191A MOVEQ   #$07,D0   		* 7 = send string
        MOVEQ   #$04,D2
        JSR     L0125A(PC)
        SUBA.W  D1,A1

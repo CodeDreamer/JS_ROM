@@ -4,32 +4,38 @@
 *  JS MDV_ROUTINES  mdv_routines
 *
 ***************************
-        
-L05000 TST.B   $EE(A6)  * Format mdv-Routine: is mdv actif ?
+
+* TRAP 2, D0=3        
+L05000 TST.B   $EE(A6)  * Format mdv-Routine: is mdv active ?
        BEQ.S   L0500A   * yes
        MOVEQ   #-9,D0   * "in use"
        RTS
-       
-L0500A MOVE.L  D1,D7
+
+* OPEN CHANNEL FOR FORMATTING       
+L0500A MOVE.L  D1,D7    * SAVE VALUE OF D1 AND A1
        MOVEA.L A1,A4
        MOVE.L  #1152,D1   * reserved space
        JSR     L02FAE   * MM.ALCHP
        NOP              * !!! to overvome asm - remove it !!!
        BEQ.S   L0501E   * sucess
        RTS              * error out of mem
-        
-L0501E LEA     $0010(A0),A0 
+
+*===========
+* FORMAT
+*===========  
+L0501E LEA     $0010(A0),A0   * A0 / A5: BASISADR. FOR FORMATTING
        MOVEA.L A0,A5
        MOVEQ   #-$01,D0
-       MOVE.W  D0,(A0)+
+       MOVE.W  D0,(A0)+       * FF followed by placeholder for sector number
        MOVEQ   #$09,D1
-L0502A MOVE.B  #$20,(A0)+
+L0502A MOVE.B  #$20,(A0)+     * RESERVE 10*SPACE FOR NAME
        DBF     D1,L0502A
-       MOVE.W  $002E(A6),(A0)   * SV.RND
+       MOVE.W  $002E(A6),(A0) * SV.RND
        SUBA.W  #$000A,A0
        MOVE.W  (A4)+,D1
-       ADDQ.W  #5,A4
+       ADDQ.W  #5,A4          * skip "MDVn_" prefix
        SUBQ.W  #5,D1
+* NOW TRANSFER NAME AND SHORTEN TO MAXIMUM LENGHT 
        CMPI.W  #$000A,D1
        BLS.S   L05048
        MOVEQ   #$0A,D1
@@ -37,16 +43,16 @@ L05048 MOVE.B  (A4)+,(A0)+
        SUBQ.W  #1,D1
        BGT.S   L05048
        LEA     $000E(A5),A0
-       MOVE.L  #$FD000C10,(A0)+
+       MOVE.L  #$FD000C10,(A0)+  * FORMAT PARAM.
        ADDQ.W  #6,A0
        MOVE.W  D0,(A0)+
-       MOVE.W  #$012A,D1
-L05060 MOVE.W  #$AA55,(A0)+
+       MOVE.W  #$012A,D1         * LOOP-COUNTER (oversize sector)
+L05060 MOVE.W  #$AA55,(A0)+      * EMPTY SECTOR VALUE
        DBF     D1,L05060
-       MOVE.W  #$0F0E,$021A(A5)
+       MOVE.W  #$0F0E,$021A(A5)  * EMPTY SECTOR CHECKSUM
        MOVE.W  D7,D1
-       LEA     $00018020,A3   * A3 status of 8049
-       MOVEQ   #$10,D0
+       LEA     $00018020,A3   * A3 control of ZX8302
+       MOVEQ   #$10,D0        * LOOP-COUNTER FOR TRANSMISSION
        JSR     L00420
        NOP                    * !!! to conform asm leave it !!!
        ORI.W   #$0700,SR      * interrupts
@@ -55,19 +61,22 @@ L05060 MOVE.W  #$AA55,(A0)+
        MOVE.L  #$0001E848,D0  * time 3750600 about 0.5 secs
 L0508E SUBQ.L  #1,D0
        BNE.S   L0508E
-       MOVE.B  #$0A,(A3)
+
+* main sector format loop
+       MOVE.B  #$0A,(A3)      * ERASE mode (erase + read)
 L05096 MOVEA.L A5,A1
        MOVEQ   #$0D,D1
-       MOVE.W  #$0479,D0
+       MOVE.W  #$0479,D0      * First GAP duration
 L0509E DBF     D0,L0509E
-       JSR     L051A6(PC)
+       JSR     L051A6(PC)     * Write sector header
        MOVE.W  #$0261,D1
-       MOVE.W  #$047B,D0
+       MOVE.W  #$047B,D0      * Second GAP duration
 L050AE DBF     D0,L050AE
-       JSR     L051A6(PC)
-       SUBQ.B  #1,-$026F(A1)
-       BCC.S   L05096
-       MOVE.B  #$02,(A3)
+       JSR     L051A6(PC)     * Write sector
+       SUBQ.B  #1,-$026F(A1)  * decrease sector number
+       BCC.S   L05096         * continue until we've reached sector 0
+
+       MOVE.B  #$02,(A3)      * Switch to READ mode
        CLR.L   -(A7)
        MOVEQ   #$00,D5
 L050C4 MOVE.W  #$00FF,D5
@@ -91,16 +100,17 @@ L050EA TST.L   D5       * 1. verify
 
 L050F2 MOVEQ   #$00,D5  * list formatted sectors
 L050F4 SUBQ.B  #1,(A1)
-       CMPI.B  #$FE,(A1)
-       BGT.S   L05108
-       BEQ.S   L05100
-       ADDQ.W  #1,(A7)
-L05100 MOVE.B  D5,$0003(A7)
+       CMPI.B  #$FE,(A1) * IS SECTOR CORRECTLY FORMATTED?
+       BGT.S   L05108    * YES BUT NOT SUCCESSFUL
+       BEQ.S   L05100    * NO
+       ADDQ.W  #1,(A7)   * ADD 1 TO SECTOR-COUNTER
+L05100 MOVE.B  D5,$0003(A7) 
        MOVE.B  (A1),D4
        MOVEA.L A1,A4
 L05108 ADDQ.W  #2,A1
        ADDQ.B  #1,D5
-       BCC.S   L050F4
+       BCC.S   L050F4    * CONTINUE TILL CARRY = 255 SECTORS
+
        ST      (A4)
        ADDQ.B  #2,D4
        BEQ.S   L05116
@@ -112,7 +122,7 @@ L05116 CMPI.W  #$00C8,(A7) * less than 200 sectors?
 L05122 CLR.L   (A1)+
        ADDQ.B  #1,D0
        BPL.S   L05122
-       LEA     $0270(A5),A1
+       LEA     $0270(A5),A1  * ADRESSE OF SECTOR-LIST
        MOVE.B  #$F8,(A1)
        MOVE.L  (A7),D1
        ADD.W   D1,D1
@@ -157,68 +167,80 @@ L05182 JSR     L02C50       * stop motor
        MOVE.L  D7,D0
        RTS
 
-L051A6 LEA     L051AC(PC),A4
+L051A6 LEA     L051AC(PC),A4  * set continuation address
        BRA.S   L051E4
 
-L051AC MOVEQ   #$0A,D4
-       BRA.S   L051DA
+L051AC MOVEQ   #$0A,D4     * ERASE mode
+       BRA.S   L051DA      * Wait, switch to erase and continue
 
+*===========
+* MD.WRITE
+*===========
 L051B0
-XL011B0 EQU L051B0-$4000 
-       MOVE.B  #$0A,(A3)   * write a sector
-       MOVE.W  #$05C9,D0
+XL011B0 EQU L051B0-$4000   * write a sector
+       MOVE.B  #$0A,(A3)   * ERASE mode (erase + read)
+       MOVE.W  #$05C9,D0   * GAP duration
 L051B8 DBF     D0,L051B8
        MOVEA.L A1,A0
        LEA     $0004(A7),A1
-       MOVEQ   #$01,D1
-       LEA     L051CA(PC),A4
-       BRA.S   L051E4
+       MOVEQ   #$01,D1     * 2 bytes (block header)
+       LEA     L051CA(PC),A4 * set continuation address
+       BRA.S   L051E4      * write block header
 
-L051CA MOVEA.L A0,A1
-       MOVE.W  #$01FF,D1
-       MOVEQ   #$05,D5
-       LEA     L051D8(PC),A4
-       BRA.S   L051F2
+L051CA MOVEA.L A0,A1       * data buffer address
+       MOVE.W  #$01FF,D1   * 512 bytes (sector data)
+       MOVEQ   #$05,D5     * 6 bytes of zero in preamble (3 per track)
+       LEA     L051D8(PC),A4 * set continuation address
+       BRA.S   L051F2      * write sector data
 
-L051D8 MOVEQ   #$02,D4
-L051DA MOVEQ   #$30,D0
+L051D8 MOVEQ   #$02,D4     * wait and switch to READ mode
+
+L051DA MOVEQ   #$30,D0     * wait for last byte to be completely written
 L051DC DBF     D0,L051DC
        MOVE.B  D4,(A3)
        RTS
 
-L051E4 MOVEQ   #$0E,D0   * common mdv write routine
-       MOVE.B  D0,(A3)
+*
+ * common mdv write routine
+ *
+ * D1 = number of bytes to write
+ * A1 = data to write 
+ * A3 = mdv control register
+ *
+L051E4 MOVEQ   #$0E,D0   * WRITE mode (erase + write)
+       MOVE.B  D0,(A3)   * A3 = ZX8302 microdrive control
        MOVE.B  D0,(A3)
        MOVEQ   #$01,D6
        LEA     $0002(A3),A2
-       MOVEQ   #$09,D5
+* write preamble
+       MOVEQ   #$09,D5   * 10 x zeros (5 per track)
 L051F2 MOVEQ   #$00,D4
 L051F4 BSR.S   L0521A
        SUBQ.B  #1,D5
        BGE.S   L051F4
-       MOVEQ   #-$01,D4
+       MOVEQ   #-$01,D4  * 2 x FF (1 per track)
        BSR.S   L0521A
        BSR.S   L0521A
-       MOVE.W  #$0F0F,D3
+       MOVE.W  #$0F0F,D3 * checksum accumulator
        MOVEQ   #$00,D4
 L05206 MOVE.B  (A1)+,D4
-       ADD.W   D4,D3
-       BSR.S   L0521A
+       ADD.W   D4,D3     * add to checksum
+       BSR.S   L0521A    * write next byte
        DBF     D1,L05206
        MOVE.W  D3,D4
-       BSR.S   L0521A
+       BSR.S   L0521A    * write checksum
        LSR.W   #8,D4
        BSR.S   L0521A
-       JMP     (A4)
+       JMP     (A4)      * continue execution (probably not RTS to avoid RAM access and keep timing tight)
 
-L0521A BTST    D6,(A3)   * test if 8049 busy
+L0521A BTST    D6,(A3)   * test if ZX8302 busy
        BNE.S   L0521A
        MOVE.B  D4,(A2)
        RTS
 
-L05222 MOVEQ   #$00,D5   * search sector header mdv
+L05222 MOVEQ   #$00,D5   * search mdvsector header - d5 counts sectors
 L05224 MOVEA.L A5,A1
-       BSR.S   L0523A
+       BSR.S   L0523A   * do it
        RTS              * failed
        BRA.S   L05224   * read-error
        CMP.B   D7,D2    * was selected sector?
@@ -230,9 +252,13 @@ L05224 MOVEA.L A5,A1
 L05236 ADDQ.L  #2,(A7)  * return addr. + 2
        RTS
 
+*===========
+* MD.SECTR
+*===========
 L0523A 
 XL0123A EQU L0523A-$4000
-       JSR     L05448(PC) * read sector header
+* read sector header
+       JSR     L05448(PC) * wait for end of gap
        RTS                * failed
        ADDQ.L  #2,(A7)    * correct
        MOVEQ   #$0D,D1
@@ -245,36 +271,50 @@ XL0123A EQU L0523A-$4000
        ADDQ.L  #2,(A7)
 L0525A RTS
 
+*===========
+* MD.READ
+*===========
 L0525C 
 XL0125C EQU L0525C-$4000
        LEA     L052CE(PC),A0   * read sector (addr. in a0)
        BRA.S   L05266
 
+*===========
+* MD.VERIN
+*===========
 L05262 
 XL01262 EQU L05262-$4000
        LEA     L05354(PC),A0   * verify sector addr. in a0
-L05266 JSR     L05448(PC)      * do it
-       RTS                     * failed
+
+*
+* common mdv read
+* 
+* A0: task-specific routine to read/verify from mdv
+* A1: destination buffer
+* A3: mdv register
+*
+L05266 JSR     L05448(PC)      * wait for end of gap and start of data
+       RTS                     * failed (timeout)
        MOVE.L  A1,-(A7)
-       CLR.W   -(A7)
+       CLR.W   -(A7)    * allocate two bytes for block header
        MOVEA.L A7,A1
        MOVEQ   #$01,D1
-       BSR.S   L052CE   * read header
+       BSR.S   L052CE   * read block header
        BRA.S   L05296   * failed
        MOVE.B  #$02,D1  * ok
-       MOVE.B  D1,(A3)  * set timing (8049)
-       MOVEQ   #$08,D0  * wait a little
+       MOVE.B  D1,(A3)  * set timing (ZX8302)
+       MOVEQ   #$08,D0
 L05280 DBF     D0,L05280
-       MOVE.B  D1,(A3)  * again timing
+       MOVE.B  D1,(A3)  * again timing (after 190 cycles from previous, or about 25 us)
        MOVE.W  #$01FF,D1
        MOVEA.L $0002(A7),A1 * a1= buffer address
-       JSR     (A0)   * do it
+       JSR     (A0)     * do it
        BRA.S   L05296   * error
        ADDQ.L  #2,$0006(A7)
 L05296 MOVEQ   #$00,D1
        MOVEQ   #$00,D2
-       MOVE.B  $0001(A7),D2
-       MOVE.B  (A7)+,D1
+       MOVE.B  $0001(A7),D2   * block number
+       MOVE.B  (A7)+,D1       * file number
        ADDQ.W  #4,A7
        RTS
 
@@ -294,14 +334,15 @@ L052B8 MOVE.W  #$0100,D0   * initialise parameters
        LEA     $0003(A3),A4   * to read track 2
        RTS
 
-L052CE BSR     L052B8   * read number of bits - initialise
+* read MDV data chunk
+L052CE BSR     L052B8     * read number of bits - initialise
 L052D0 BTST    D6,(A3)
-       DBNE    D0,L052D0  * till buffer is empty
+       DBNE    D0,L052D0  * wait for next byte to be available
        EXG      A4,A4     * !!! WHAT'S THAT ??? !!!
-       MOVE.B   (A2),D4
+       MOVE.B   (A2),D4   * read track 1 byte
        EXG      A4,A2     * !!! REALLY NECESSARY ?? !!!
        MOVE.B   D4,(A1)+
-       ADD.W    D4,D3
+       ADD.W    D4,D3     * update checksum
        TST.W    D0
        BLT      L05446
        MOVEQ    #$14,D0
@@ -347,7 +388,7 @@ L052EE BTST     D6,(A3)   * then omit the following code)!!!
 o05336 MOVEQ   #-1,D0
 L05338 NOP
        NOP              * including this line but: - reset label!
-       MOVE.B  (A2),D4
+       MOVE.B  (A2),D4  * read track 2 byte
        EXG     A4,A2
        MOVE.B  D4,(A1)+
        ADD.W   D4,D3
@@ -355,9 +396,10 @@ L05338 NOP
        BLT     L05446
        MOVEQ   #$14,D0
        SUBQ.W  #1,D1
-       BGE.S   L052EA   * try evtl second track
-       BRA     L053DE
+       BGE.S   L052EA   * more bytest to read
+       BRA     L053DE   * done, go to read checksum
 
+* verify sector data
 L05354 BSR     L052B8   * verify reading - initialise
 L05358 BTST    D6,(A3)
        DBNE    D0,L05358
@@ -423,6 +465,7 @@ L053C4 NOP
        SUBQ.W  #1,D1
        BGE.S   L05376
        
+* read checksum
 L053DE BTST    D6,(A3)  * !!! again as above: dbne d0,L053DE
        BNE.S   L0542C
        BTST    D6,(A3)
@@ -475,27 +518,28 @@ L05430 MOVE.B  (A2),D4
        BEQ.S   L053DE
        CMP.W   D4,D3    * compare checksum
        BNE.S   L05446   * not equal
-       ADDQ.L  #2,(A7)
+       ADDQ.L  #2,(A7)  * OK return
 L05446 RTS
 
-L05448 MOVEQ   #$00,D1   * wait for pulsing interrupts
+* wait for end of gap and start of data
+L05448 MOVEQ   #$00,D1
 L0544A SUBQ.W  #1,D1     * 0.38 seconds
-       BEQ.S   L05476
-       BTST    #$03,(A3) * from 8049
-       BEQ.S   L0544A
+       BEQ.S   L05476    * timeout
+       BTST    #$03,(A3) * gap flag from ZX8302
+       BEQ.S   L0544A    * if no gap, yet, keep waiting
        MOVEQ   #$00,D1
 L05456 SUBQ.W  #1,D1     * wait again 0.38 sec
-       BEQ.S   L05476
-       MOVEQ   #$17,D0
+       BEQ.S   L05476    * timeout
+       MOVEQ   #$17,D0   * we'd like to see no gap for at least 24 times
 L0545C BTST    #$03,(A3)
-       BNE.S   L05456
-       DBF     D0,L0545C
+       BNE.S   L05456    * gap again, so restart looking
+       DBF     D0,L0545C * minimum wait is about 1350 cycles (180 us)
        MOVE.B  #$02,D1
-       MOVE.B  D1,(A3)
+       MOVE.B  D1,(A3)   * set READ mode to skip sector preamble
        MOVEQ   #$08,D0
 L0546E DBF     D0,L0546E
        MOVE.B  D1,(A3)
-       ADDQ.L  #2,(A7)
+       ADDQ.L  #2,(A7)   * OK return
 L05476 RTS
 
 **************************************************
