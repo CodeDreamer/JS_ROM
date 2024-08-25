@@ -905,13 +905,13 @@ L0073A EXG     D2,D1
        BNE.S   L007BC
        ADDQ.W  #4,A0
 L0074E
-       MOVE.L  XL0075A,(A0)+   * pseudo driver adress
+       MOVE.L  XL0075A,(A0)+   * pseudo driver address
        MOVE.L  (A7)+,(A0)+     * job id
        CLR.L   (A0)+
        BRA.S   L00766  * !!! there: BRA L003A4
 
 
-L0075A DC.L    L0305E    * adress for release of heap
+L0075A DC.L    L0305E    * address for release of heap
 XL0075A EQU L0075A-$0C   * that's the value, we need
 
 * release area in common heap
@@ -954,7 +954,7 @@ L007A4 JSR     L031B8(PC)     * allocate memory
        BRA.S   L007BE         * !!! there: BRA L003A6 
 * Faster: Jump direct - used to save space
 
-* Release Basic Prog Aera 
+* Release Basic Prog Area 
 TR1d17
 XLtr1d17 EQU TR1d17
        MOVE.L  $0014(A6),-(A7)   * SV TRNSP
@@ -1701,7 +1701,7 @@ L00E70 JSR     L0305E(PC)    * MT.RECHP
        RTS
 
 * I/O OF CON AND SER driver
-L00E76 TST.B   $0033(A6)     * I/O OF CON/SER screen freezed?
+L00E76 TST.B   $0033(A6)     * I/O OF CON/SCR screen freezed?
        BEQ.S   L00E80
        MOVEQ   #-1,D0        * not complete
        RTS
@@ -1738,8 +1738,10 @@ L00EB8 DC.B   L00EC0-L00EB8     * test pending input
 
 *------------ general scr I/O       
 
+* test pending input
 L00EC0 JMP     L0380A(PC)     * IO.QTEST
 
+* get byte
 L00EC6 MOVEA.L A5,A2         * A2=buffer adress of keyboard
        JMP     L0385E(PC)    * IO.QOUT
 
@@ -1754,6 +1756,7 @@ L00ECC CMP.W   D4,D5         * buffer full?
        ADDQ.W  #1,D4         * increase line length
        BRA.S   L00ECC
 
+* send string
 L00EDE MOVEQ   #$00,D0
        CMP.W   D4,D5
        BLS.S   L00EEE
@@ -2110,7 +2113,7 @@ L01228 MOVEQ   #$0C,D4
 L0122A MOVE.W  D4,$00AA(A6)   * SV.FSTAT
 L0122E RTS
 
-      include flp1_mdv_main
+      include mdv_main
 
 * clock-traps       
 
@@ -2264,8 +2267,8 @@ L01A4C JSR     L01BCE(PC)     * trap#3,D0 = 05
 * underline, strip, colour, size etc. are now in D3
 
        LEA     $003A(A0),A1    * strip colour mask
-       MOVEM.L $002A(A0),A2-A3 * font adress
-       JSR     L02840(PC)      * prin char
+       MOVEM.L $002A(A0),A2-A3 * font address
+       JSR     L02840(PC)      * print char
        BRA     L01C48          * cursor-movement
 L01A76 RTS
 
@@ -4059,7 +4062,7 @@ L0297C DC.W    $0000
        DC.W    $FFC0
        DC.W    $FFF0
 
-     include flp1_mdv_sys
+     include mdv_sys
 
 * execution of command to 8049
 L02C72 MOVE    SR,-(A7)    * transmission with 8049 rts=rte
@@ -4236,7 +4239,7 @@ L02E18 JSR     L0380A(PC)    * IO.QTEST  receive ser#
        JSR     L02F9A(PC)
        MOVE.B  D1,D4
        ANDI.W  #$003F,D4
-       BEQ.S   L02E56(PC)
+       BEQ.S   L02E56
        SUBQ.W  #1,D4
 L02E36 JSR     L02F9A(PC)
        TST.B   -$0002(A2)
@@ -6434,21 +6437,21 @@ L0417E MOVEQ   #$00,D0
        EXG     D0,D1
        RTS
 
-       include flp1_arithm_asm
+       include arithm_asm
 
-       include flp1_BASIC1_asm
+       include BASIC1_asm
 
-       include flp1_mdv_routines
+       include mdv_routines
 
-       include flp1_net_routines
+       include net_routines
 
-       include flp1_basic2_asm
+       include basic2_asm
 
-       include flp1_basic_commands
+       include basic_commands
 
-       include flp1_basic3_asm
+       include basic3_asm
 
-       include flp1_charfount_asm
+       include charfount_asm
 
 L0B352 ANDI.W #$0007,D2     * key code -> ASCII conversion
        ANDI.W #$003F,D1     * D2=shift/ctl/alt   D1=key code
@@ -6552,7 +6555,7 @@ L0B450 MOVEM.L   (A7)+,D3/D4/D5/A3
        ADDQ.L     #4,(A7)
 oB456 RTS
 
-      include flp1_Keyboard_asm
+      include Keyboard_asm
 
 
 L0B56C MOVEM.L   D1/D2/D3/A1,-(A7)   * send character to ser, with TRA-table translation
@@ -6619,9 +6622,9 @@ L0B60C MOVE.B   D2,D1
 L0B60E MOVEM.L (A7)+,D0/D1/D2/A1
        RTS
 
-       include flp1_tra_tab
+       include tra_tab
 
-       include flp1_sys_mess
+       include sys_mess
 
         
         ORG $BFE2
@@ -6634,7 +6637,7 @@ L0BFF2 DC.L L0B352      * key code -> ASCII conversion
 
 * nr of version
 
-L0BBF6  DC.L $312D3130  * QDOS version: '1.10'
+L0BBF6  DC.B    '1.10'  * QDOS version: '1.10'
 L0BBFA  DC.W     $02    * VER$ string:  "JS"
         DC.B    'JS'
         DC.W     $00

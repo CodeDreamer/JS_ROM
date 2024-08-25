@@ -8,6 +8,15 @@ This is a commented disassembly of the ROM that has been available online and wa
 ## History
 1. Disassembly and comments by Wolfgang Goeller (downloaded from the *Maya* FTP archive in the early days of the Internet).
 2. Additional comments by Richard Zidlicky (also available on Dilwyn's web site).
+3. Additional comments by Daniele Terdina (also available on Q-emuLator's web site).
+4. Minor changes to cross-assemble with Asm68K_QL
 
 ## Building with the GST assembler
-From a comment in system_asm, it's possible to assemble the ROM code with the GST Macro Assembler. It needs a 256 KB memory expansion and using the -NOLIST option to avoid running out of space.
+According to a comment in system_asm, it's possible to assemble the ROM code with the GST Macro Assembler. It needs a 256 KB memory expansion and using the -NOLIST option to avoid running out of space.  
+Use the [original sources](https://github.com/CodeDreamer/JS_ROM/releases/tag/original).
+
+## Building with Asm68K
+Using the Asm68K cross-assembler, assemble with:
+```
+Asm68K system_asm
+```
