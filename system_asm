@@ -905,7 +905,7 @@ L0073A EXG     D2,D1
        BNE.S   L007BC
        ADDQ.W  #4,A0
 L0074E
-       MOVE.L  XL0075A,(A0)+   * pseudo driver address
+       MOVE.L  #XL0075A,(A0)+   * pseudo driver address
        MOVE.L  (A7)+,(A0)+     * job id
        CLR.L   (A0)+
        BRA.S   L00766  * !!! there: BRA L003A4
@@ -6640,7 +6640,9 @@ L0BFF2 DC.L L0B352      * key code -> ASCII conversion
 L0BBF6  DC.B    '1.10'  * QDOS version: '1.10'
 L0BBFA  DC.W     $02    * VER$ string:  "JS"
         DC.B    'JS'
-        DC.W     $00
+        DC.B    '  '
+        
+        SIZE    0       * prevent creation of executable header
 
         END
         

@@ -32,12 +32,12 @@ L04AAA JSR     L0566E(PC)
        LEA     L04BBA(PC),A1    * window def
        MOVEQ   #$00,D4
        BSR.S   L04AA0           * init window 0
-       LEA     $0C000,A3        * ROM EXTENSION
+       MOVEA.L #$0C000,A3       * ROM EXTENSION
        BSR.S   L04A76           * try to initialise extension
-       MOVEA.L #$C0000,A3        * EXTENSIONS at C0000 ff 
+       MOVEA.L #$C0000,A3       * EXTENSIONS at C0000 ff 
 L04AC8 BSR.S   L04A76           * SAME AS BEFORE
        ADDA.W  #$4000,A3        * add 16 K
-       CMPA.L  #$CC000,A3       * till end of RAM
+       CMPA.L  #$100000,A3       * till end of RAM
 
 *
 * !!! to avoid software - problems caused by bad decoding of ROM-port
@@ -68,7 +68,7 @@ GETMOD MOVEQ   #$01,D0          * TRAP NR
        BEQ.S   INIMON
        SUBQ.B  #$4,D1           * F2 ?
        BNE.S   GETMOD
-       MOVEQ   #$00,D6
+       MOVEQ   #$08,D6
        MOVEQ   #$01,D7
        MOVEQ   #$44,D5          * d5=displacement for windows
 INIMON MOVE.B  D6,D1
@@ -114,21 +114,21 @@ L04B72
 XL04B72 EQU L04B72
 * Moni#0
        DC.B    $00,$00,$00,$04  * size border/size colour/paper/ink
-       DC.B    $02,$00,$00,'2'  * width hight
-       DC.B    $00,$00,$00,$CE  * origin horiz and verti
+       DC.B    $02,$00,$00,'2'  * width height
+       DC.B    $00,$00,$00,$CE  * origin horizontal and vertical
 * Moni#1       
        DC.B    $FF,$01,$02,$07
        DC.B    $01,$00,$00,$CA
        DC.B    $01,$00,$00,$00
 * Moni#2
-       DC.B    $FF,$01,$02,$07
+       DC.B    $FF,$01,$07,$02
        DC.B    $01,$00,$00,$CA
        DC.B    $00,$00,$00,$00
 * TV#0
        DC.B    $00,$00,$00,$07
        DC.B    $01,$C0,$00,'('
        DC.B    $00,' ',$00,$D8
-*TV#1
+* TV#1
        DC.B    $00,$00,$02,$07
        DC.B    $01,$C0,$00,$C8
        DC.B    $00,' ',$00,$10
