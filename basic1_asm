@@ -37,7 +37,7 @@ L04AAA JSR     L0566E(PC)
        MOVEA.L #$C0000,A3       * EXTENSIONS at C0000 ff 
 L04AC8 BSR.S   L04A76           * SAME AS BEFORE
        ADDA.W  #$4000,A3        * add 16 K
-       CMPA.L  #$100000,A3       * till end of RAM
+       CMPA.L  #$CC000,A3       * till end of RAM
 
 *
 * !!! to avoid software - problems caused by bad decoding of ROM-port

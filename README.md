@@ -3,6 +3,8 @@ Disassembly of the Sinclair QL's operating system, version "JS".
 
 The Sinclair QL came with an operating system in ROM called QDOS. Version "JS" is the last version that was available in the UK.
 
+QDOS was written at Sinclair Research, mostly by Tony Tebby (operating system) and Jan Jones (SuperBASIC interpreter).
+
 This is a commented disassembly of the ROM that has been available online and was created by Wolfgang Goeller. Additional comments by Richard Zidlicky and Daniele Terdina.
 
 ## History
@@ -24,5 +26,9 @@ The --noopt is not necessary, but makes the output closer to the original.
 
 ## Releases
 Available GitHub releases (code snapshots):
-- `original` is the original disassembly published in the 90s, plus some additional comments.
+- `original` is the original disassembly published in the 90s, plus some additional comments. It contains some modifications.
 - `accurate` produces code identical to the JS ROM when assembled with Asm68K_QL, with one exception: some jumps in the original ROM use "absolute long" addressing (probably by mistake), while the assembler generates "absolute short" addressing. There is no functional difference, and the disassembly already included NOPs to keep the following code at the original address.
+
+## main branch
+The main branch contains the original ROM JS code plus a couple of additional changes:
+- Workaround for ROM detection issue.
