@@ -182,7 +182,7 @@ L04338 CMPI.W  #$0800,$00(A6,A1.L)
        BCHG    #1,D7
 L0434A JSR     L04A4A(PC)
        SUBQ.W  #6,A1
-       MOVE.L  #$4498517A,$02(A6,A1.W)
+       MOVE.L  #$4498517A,$02(A6,A1.L)
        MOVE.W  #$07FF,$00(A6,A1.L)
        JSR     L0482A(PC)
        ADDQ.W  #6,A1

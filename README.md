@@ -32,3 +32,4 @@ Available GitHub releases (code snapshots):
 ## main branch
 The main branch contains the original ROM JS code plus a couple of additional changes:
 - Workaround for ROM detection issue.
+- Support for 4 MB and larger RAM.

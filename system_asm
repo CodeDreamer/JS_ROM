@@ -351,7 +351,7 @@ L00246 BSR.S   L00250           * init job table
 
 L00250 MOVE.L  A3,(A4)+         * initialising-routine
        MOVE.L  A3,(A4)+
-       ADDA.W  D0,A3
+       ADDA.L  D0,A3
        MOVE.L  A3,(A4)+
        ADDQ.W  #4,A4
        RTS
@@ -4693,7 +4693,7 @@ L03226 MOVE.L  A0,D0
        SUB.L   A6,D0
        LSR.L   #6,D0
        MOVEA.L $0058(A6),A1   * SV.BTBAS
-       ADDA.W  D0,A1
+       ADDA.L  D0,A1
        MOVE.L  D1,D0
        LSR.L   #6,D0
        LSR.L   #3,D0
